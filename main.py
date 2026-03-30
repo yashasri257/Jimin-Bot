@@ -245,17 +245,17 @@ async def inventory(inter, user: disnake.User = None):
     await inter.response.send_message(embed=embed)
 
 # =========================
-# START
+# START BOT
 # =========================
-# bot.run(os.getenv("TOKEN"))
-  TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("TOKEN")
+
+print("TOKEN VALUE:", TOKEN)  # debug line
 
 if not TOKEN:
-    raise Exception("❌ TOKEN not found")
+    raise Exception("❌ TOKEN not found. Check Railway Variables.")
 
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
 bot.run(TOKEN)
-print("TOKEN VALUE:", TOKEN)
