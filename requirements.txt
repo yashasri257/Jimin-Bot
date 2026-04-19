@@ -1,4 +1,4 @@
 discord.py
 motor
 pillow
-requests
+aiohttp
