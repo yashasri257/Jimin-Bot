@@ -1,3 +1,4 @@
-disnake
+discord.py
+motor
 pillow
 requests
