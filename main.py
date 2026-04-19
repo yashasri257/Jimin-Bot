@@ -321,8 +321,7 @@ async def on_ready():
 # RUN BOT
 # ======================
 
-bot.run(TOKEN)    "sanctum":"https://ibb.co/BKBQFq5z"
-}
+bot.run(TOKEN)    "sanctum":"https://ibb.co/BKBQFq5z"}
 
 EMOJIS = [
     "https://ibb.co/Xr66LPGn",
