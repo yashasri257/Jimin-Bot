@@ -7,12 +7,19 @@ from PIL import Image
 import requests
 from io import BytesIO
 
+# ======================
+# SETUP
+# ======================
+
 TOKEN = os.getenv("TOKEN")
 MONGO = os.getenv("MONGO")
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
-client = AsyncIOMotorClient(MONGO)
-db = client["kpop"]
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
+tree = bot.tree
+
+mongo_client = AsyncIOMotorClient(MONGO)
+db = mongo_client["kpop"]
 cards = db["cards"]
 users = db["users"]
 
@@ -30,11 +37,63 @@ RARITY_ICONS = {
     "sanctum":"https://ibb.co/BKBQFq5z"
 }
 
-EMOJIS = ["https://ibb.co/Xr66LPGn", "https://ibb.co/qMbF7wfm", "https://ibb.co/9mdzC5CP"]
+EMOJIS = [
+    "https://ibb.co/Xr66LPGn",
+    "https://ibb.co/qMbF7wfm",
+    "https://ibb.co/9mdzC5CP"
+]
 
-# 🎴 ADD CARD
-@bot.tree.command(name="add_card")
-async def add_card(interaction:discord.Interaction,
+RARITY_CHOICES = [
+    discord.app_commands.Choice(name=r, value=r)
+    for r in RARITIES
+]
+
+# ======================
+# CARD SYSTEM
+# ======================
+
+@tree.command(name="add_card")
+@app_commands.choices(rarity=RARITY_CHOICES)
+async def add_card(
+    interaction: discord.Interaction,
+    name: str,
+    group: str,
+    rarity: app_commands.Choice[str],
+    card_code: str,
+    image_url: str,
+    back_url: str,
+    droppable: bool,
+    era: str = None
+):
+
+    await cards.insert_one({
+        "name": name,
+        "group": group,
+        "rarity": rarity.value,
+        "card_code": card_code,
+        "image_url": image_url,
+        "back_url": back_url,
+        "droppable": droppable,
+        "era": era
+    })
+
+    await interaction.response.send_message("Card added ✅")
+
+
+@tree.command(name="del_card")
+async def del_card(interaction: discord.Interaction, card_code: str):
+    await cards.delete_one({"card_code": card_code})
+    await interaction.response.send_message("Deleted 🗑️")
+
+# ======================
+# DROP SYSTEM
+# ======================
+
+def get_base():
+    return {
+        "whisper": 40,
+        "cherub": 30,
+        "sasync def add_card(interaction:discord.Interaction,
                    name:str, group:str,
                    rarity:str,
                    card_code:str,
