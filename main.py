@@ -21,6 +21,7 @@ if not MONGO:
     raise ValueError("MONGO missing")
 
 intents = discord.Intents.default()
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
