@@ -2,27 +2,16 @@ print("RUNNING NEW FILE")
 import discord
 from discord.ext import commands
 from discord import app_commands
-import os, random
+import os, random, time
 from motor.motor_asyncio import AsyncIOMotorClient
 from PIL import Image
 from io import BytesIO
 import aiohttp
 
-# ======================
-# CONFIG
-# ======================
-
 TOKEN = os.getenv("TOKEN")
 MONGO = os.getenv("MONGO")
 
-if not TOKEN:
-    raise ValueError("TOKEN missing")
-if not MONGO:
-    raise ValueError("MONGO missing")
-
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
 tree = bot.tree
 
 mongo = AsyncIOMotorClient(MONGO)
@@ -31,9 +20,102 @@ cards = db["cards"]
 users = db["users"]
 
 # ======================
-# RARITIES
+# 🔒 STAFF
 # ======================
+STAFF_IDS = [871159389799743488
+            1106193228971122689
+863994605493682206
+701968449462599752
+702667135775801376
+}
+def is_staff(uid):
+    return uid in STAFF_IDS
 
+# ======================
+# 💎 CONFIG
+# ======================
+DROP_COOLDOWN = 300
+CLAIM_COOLDOWN = 120
+DAILY_COOLDOWN = 79200
+
+last_drop = {}
+last_claim = {}
+
+CURRENCY = "Essence"
+
+# ======================
+# ✨ RARITIES
+# ======================
+RARITIES = ["whisper","cherub","siren","enthrall","devotion","fallen","eclipse","velour","sanctum"]
+
+RARITY_CHOICES = [app_commands.Choice(name=r.title(), value=r) for r in RARITIES]
+
+RARITY_ICONS = {
+    "whisper":"⋆","cherub":"✧","siren":"✦",
+    "enthrall":"❖","devotion":"✿",
+    "fallen":"🩸","eclipse":"☾","velour":"♛","sanctum":"✶"
+}
+
+# ======================
+# 🎴 DROP CHANCES
+# ======================
+def get_chances():
+    mode=random.random()
+    if mode<0.1:
+        return {"whisper":30,"cherub":25,"siren":17,"enthrall":12,"devotion":8,"eclipse":5,"velour":3}
+    elif mode<0.3:
+        return {"whisper":30,"cherub":25,"siren":20,"enthrall":12,"devotion":8,"eclipse":5}
+    elif mode<0.5:
+        return {"whisper":30,"cherub":25,"siren":20,"enthrall":12,"devotion":9,"velour":4}
+    else:
+        return {"whisper":35,"cherub":30,"siren":20,"enthrall":10,"devotion":5}
+
+async def get_card():
+    chances=get_chances()
+    rarity=random.choices(list(chances),list(chances.values()))[0]
+
+    res=await cards.aggregate([
+        {"$match":{"rarity":rarity,"droppable":True}},
+        {"$sample":{"size":1}}
+    ]).to_list(1)
+
+    return res[0] if res else None
+
+# ======================
+# 🎴 RARITY BACK SYSTEM
+# ======================
+async def get_back(card):
+    if card.get("rarity_back"):
+        return card["rarity_back"]
+
+    query={
+        "group":card["group"],
+        "rarity":card["rarity"],
+        "rarity_back":{"$ne":None}
+    }
+
+    if card.get("era"):
+        query["era"]=card["era"]
+
+    other=await cards.find_one(query)
+
+    if other:
+        return other["rarity_back"]
+
+    return card["image_url"]
+
+# ======================
+# 🖼 MERGE
+# ======================
+async def merge(urls):
+    async with aiohttp.ClientSession() as session:
+        imgs=[]
+        for url in urls:
+            async with session.get(url) as r:
+                data=await r.read()
+                imgs.append(Image.open(BytesIO(data)).resize((300,420)))
+
+    canvas=Image.new("RGBA
 RARITIES = [
     "whisper", "cherub", "siren",
     "enthrall", "devotion",
