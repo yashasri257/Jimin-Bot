@@ -196,12 +196,20 @@ class DropView(discord.ui.View):
         uid = interaction.user.id
         now = time.time()
 
-        if uid in last_claim and now-last_claim[uid] < CLAIM_CD:
-            await interaction.response.send_message("✧ wait a moment...", ephemeral=True)
+        # claim cooldown
+        last = last_claim.get(uid, 0)
+        if now - last < CLAIM_CD:
+            await interaction.response.send_message(
+                "✧ the magic hasn't settled yet... wait a moment",
+                ephemeral=True
+            )
             return
 
         if self.claimed[idx]:
-            await interaction.response.send_message("✧ already taken", ephemeral=True)
+            await interaction.response.send_message(
+                "✧ this card has already been taken",
+                ephemeral=True
+            )
             return
 
         self.claimed[idx] = True
@@ -209,79 +217,101 @@ class DropView(discord.ui.View):
 
         card = self.cards[idx]
 
+        # give card
         await users.update_one(
-            {"id":uid},
-            {"$inc":{f"cards.{card['card_code']}":1}},
+            {"id": uid},
+            {"$inc": {f"cards.{card['card_code']}": 1}},
             upsert=True
         )
 
+        # disable button
         self.children[idx].disabled = True
         await interaction.response.edit_message(view=self)
 
-        await interaction.followup.send("✧ the card reveals itself...")
+        # suspense message
+        await interaction.followup.send("✧ the card begins to reveal itself...")
 
         await asyncio.sleep(20)
 
+        # reveal
         embed = discord.Embed(
             title=f"{card['name']}",
             description=f"{card['group']} • {card['rarity']}",
             color=0x2b2d31
         )
         embed.add_field(name="Code", value=card["card_code"])
-        embed.add_field(name="Era", value=card.get("era","—"))
+        embed.add_field(name="Era", value=card.get("era", "—"))
         embed.set_image(url=card["image_url"])
 
         await interaction.followup.send(embed=embed)
 
     @discord.ui.button(label="1")
-    async def b1(self,i,b): await self.handle(i,0)
+    async def b1(self, interaction, button):
+        await self.handle(interaction, 0)
 
     @discord.ui.button(label="2")
-    async def b2(self,i,b): await self.handle(i,1)
+    async def b2(self, interaction, button):
+        await self.handle(interaction, 1)
 
     @discord.ui.button(label="3")
-    async def b3(self,i,b): await self.handle(i,2)
+    async def b3(self, interaction, button):
+        await self.handle(interaction, 2)
+
 
 # ======================
-# 🎴 DROP
+# 🎴 DROP COMMAND
 # ======================
-@tree.command(name="drop")
-async def drop(interaction:discord.Interaction):
+@tree.command(name="drop", description="✧ summon cards")
+async def drop(interaction: discord.Interaction):
+
+    await interaction.response.defer()  # 🔥 fixes timeout
 
     uid = interaction.user.id
     now = time.time()
 
-    if uid in last_drop and now-last_drop[uid] < DROP_CD:
-        await interaction.response.send_message("✧ return later...", ephemeral=True)
+    # cooldown check
+    last = last_drop.get(uid, 0)
+    if now - last < DROP_CD:
+        await interaction.followup.send(
+            f"✧ return later... ({int(DROP_CD - (now - last))}s)",
+            ephemeral=True
+        )
         return
 
     last_drop[uid] = now
 
+    # get cards
     chosen = [await get_card() for _ in range(3)]
+
     if None in chosen:
-        await interaction.response.send_message("✧ no cards yet")
+        await interaction.followup.send("✧ no cards available yet")
         return
 
+    # get rarity backs
     backs = [await get_back(c) for c in chosen]
     img = await merge(backs)
 
-    file = discord.File(img,"drop.png")
+    file = discord.File(img, "drop.png")
 
+    # embed
     embed = discord.Embed(
         title="✧ ethereal descent ✧",
-        description="three cards have descended\nchoose one before they fade",
+        description="three unseen cards descend...\nchoose one before it fades",
         color=0x2b2d31
     )
 
-    for i,c in enumerate(chosen,1):
+    for i, c in enumerate(chosen, 1):
         embed.add_field(
-            name=f"{i}. {c['rarity']}",
-            value=c["group"],
+            name=f"{i}. {c['rarity'].title()}",
+            value=f"{c['group']}",
             inline=False
         )
 
-    await interaction.response.send_message(embed=embed,file=file,view=DropView(chosen))
-
+    await interaction.followup.send(
+        embed=embed,
+        file=file,
+        view=DropView(chosen)
+    )
 # ======================
 # 🎁 DAILY
 # ======================
@@ -346,4 +376,3 @@ async def on_ready():
     print("READY")
 
 bot.run(TOKEN)
-        
