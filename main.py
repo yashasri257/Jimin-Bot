@@ -111,6 +111,7 @@ async def merge(urls):
     canvas.save(buf,"PNG")
     buf.seek(0)
     return buf
+
 # ======================
 # 🎒 INVENTORY VIEW (PAGINATION)
 # ======================
@@ -425,11 +426,13 @@ async def inventory(
     dupes: bool = False
 ):
 
+    await interaction.response.defer()  # 🔥 IMPORTANT
+
     target = user or interaction.user
 
     data = await users.find_one({"id": target.id})
     if not data or "cards" not in data:
-        await interaction.response.send_message("✧ nothing rests here...", ephemeral=True)
+        await interaction.followup.send("✧ nothing rests here...", ephemeral=True)
         return
 
     items = []
@@ -439,7 +442,6 @@ async def inventory(
         if not card:
             continue
 
-        # filters
         if name and name.lower() not in card["name"].lower():
             continue
         if group and group.lower() != card["group"]:
@@ -447,15 +449,12 @@ async def inventory(
         if rarity and rarity.value != card["rarity"]:
             continue
 
-        # dupes logic
         display_count = count - 1 if dupes else count
         if display_count <= 0:
             continue
 
-        # 🔥 GET ICON
         icon = RARITY_ICONS.get(card["rarity"], "")
 
-        # ✨ FORMAT WITH ICON
         text = f"{card['group'].title()} ✧ {card['name']} • [{card['rarity'].title()}]({icon}) • {card['card_code']} ×{display_count}"
 
         items.append({
@@ -464,13 +463,11 @@ async def inventory(
         })
 
     if not items:
-        await interaction.response.send_message("✧ nothing matches the search...", ephemeral=True)
+        await interaction.followup.send("✧ nothing matches the search...", ephemeral=True)
         return
 
-    # sort by group
     items.sort(key=lambda x: x["group"])
 
-    # pagination
     per_page = 5
     pages = []
 
@@ -490,7 +487,7 @@ async def inventory(
     )
     embed.set_footer(text=f"page 1/{len(pages)}")
 
-    await interaction.response.send_message(
+    await interaction.followup.send(
         embed=embed,
         view=InventoryView(pages, interaction.user.id)
     )
@@ -595,4 +592,3 @@ async def on_ready():
     print("READY")
 
 bot.run(TOKEN)
-        
