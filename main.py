@@ -1,3 +1,4 @@
+
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -111,6 +112,43 @@ async def merge(urls):
     canvas.save(buf,"PNG")
     buf.seek(0)
     return buf
+# ======================
+# 🎒 INVENTORY VIEW (PAGINATION)
+# ======================
+class InventoryView(discord.ui.View):
+    def __init__(self, pages, user_id):
+        super().__init__(timeout=120)
+        self.pages = pages
+        self.page = 0
+        self.user_id = user_id
+
+    async def update(self, interaction):
+        embed = discord.Embed(
+            title=self.pages[self.page]["title"],
+            description=self.pages[self.page]["content"],
+            color=0x2b2d31
+        )
+        embed.set_footer(text=f"page {self.page+1}/{len(self.pages)}")
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="◀")
+    async def prev(self, interaction, button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("✧ not yours", ephemeral=True)
+
+        if self.page > 0:
+            self.page -= 1
+        await self.update(interaction)
+
+    @discord.ui.button(label="▶")
+    async def next(self, interaction, button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("✧ not yours", ephemeral=True)
+
+        if self.page < len(self.pages)-1:
+            self.page += 1
+        await self.update(interaction)
 
 # ======================
 # 🔒 ADD CARD
@@ -368,6 +406,188 @@ async def view(interaction:discord.Interaction, card_code:str):
     await interaction.response.send_message(embed=embed)
 
 # ======================
+# INVENTORY 
+# ======================
+@tree.command(name="inventory", description="✧ view a collection of owned cards")
+@app_commands.describe(
+    user="view another user's inventory",
+    name="filter by idol name",
+    group="filter by group",
+    rarity="filter by rarity",
+    dupes="show only duplicates"
+)
+@app_commands.choices(rarity=RARITY_CHOICES)
+async def inventory(
+    interaction: discord.Interaction,
+    user: discord.User = None,
+    name: str = None,
+    group: str = None,
+    rarity: app_commands.Choice[str] = None,
+    dupes: bool = False
+):
+
+    target = user or interaction.user
+
+    data = await users.find_one({"id": target.id})
+    if not data or "cards" not in data:
+        await interaction.response.send_message("✧ nothing rests here...", ephemeral=True)
+        return
+
+    items = []
+
+    for code, count in data["cards"].items():
+        card = await cards.find_one({"card_code": code})
+        if not card:
+            continue
+
+        # filters
+        if name and name.lower() not in card["name"].lower():
+            continue
+        if group and group.lower() != card["group"]:
+            continue
+        if rarity and rarity.value != card["rarity"]:
+            continue
+
+        # dupes logic
+        display_count = count - 1 if dupes else count
+        if display_count <= 0:
+            continue
+
+        # 🔥 GET ICON
+        icon = RARITY_ICONS.get(card["rarity"], "")
+
+        # ✨ FORMAT WITH ICON
+        text = f"{card['group'].title()} ✧ {card['name']} • [{card['rarity'].title()}]({icon}) • {card['card_code']} ×{display_count}"
+
+        items.append({
+            "group": card["group"],
+            "text": text
+        })
+
+    if not items:
+        await interaction.response.send_message("✧ nothing matches the search...", ephemeral=True)
+        return
+
+    # sort by group
+    items.sort(key=lambda x: x["group"])
+
+    # pagination
+    per_page = 5
+    pages = []
+
+    for i in range(0, len(items), per_page):
+        chunk = items[i:i+per_page]
+        content = "\n".join(x["text"] for x in chunk)
+
+        pages.append({
+            "title": f"{target.name}'s inventory",
+            "content": content
+        })
+
+    embed = discord.Embed(
+        title=pages[0]["title"],
+        description=pages[0]["content"],
+        color=0x2b2d31
+    )
+    embed.set_footer(text=f"page 1/{len(pages)}")
+
+    await interaction.response.send_message(
+        embed=embed,
+        view=InventoryView(pages, interaction.user.id)
+    )
+
+# ======================
+# COLLECTION 
+# ======================
+@tree.command(name="collection", description="✧ view your collection progress")
+@app_commands.describe(
+    group="view a specific group's collection",
+    name="view collection of an idol",
+    rarity="filter by rarity"
+)
+@app_commands.choices(rarity=RARITY_CHOICES)
+async def collection(
+    interaction: discord.Interaction,
+    group: str = None,
+    name: str = None,
+    rarity: app_commands.Choice[str] = None
+):
+
+    uid = interaction.user.id
+    user_data = await users.find_one({"id": uid}) or {"cards": {}}
+
+    owned = user_data.get("cards", {})
+
+    query = {}
+    if group:
+        query["group"] = group.lower()
+    if name:
+        query["name"] = {"$regex": name, "$options": "i"}
+    if rarity:
+        query["rarity"] = rarity.value
+
+    all_cards = await cards.find(query).to_list(None)
+
+    if not all_cards:
+        await interaction.response.send_message("✧ no such cards exist...", ephemeral=True)
+        return
+
+    total = len(all_cards)
+    owned_count = 0
+
+    for c in all_cards:
+        if owned.get(c["card_code"], 0) > 0:
+            owned_count += 1
+
+    percent = int((owned_count / total) * 100)
+
+    embed = discord.Embed(
+        title="✧ collection ✧",
+        description=(
+            f"progress: {owned_count}/{total}\n"
+            f"completion: {percent}%"
+        ),
+        color=0x2b2d31
+    )
+
+    # ✨ show small preview list
+    preview = []
+    for c in all_cards[:10]:
+        if owned.get(c["card_code"], 0) > 0:
+            preview.append(f"✓ {c['name']}")
+        else:
+            preview.append(f"✧ {c['name']}")
+
+    embed.add_field(
+        name="cards",
+        value="\n".join(preview),
+        inline=False
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+    # ======================
+    # 🩸 FALLEN UNLOCK
+    # ======================
+    if group and percent == 100:
+        fallen_cards = await cards.find({
+            "group": group.lower(),
+            "rarity": "fallen"
+        }).to_list(None)
+
+        for c in fallen_cards:
+            await users.update_one(
+                {"id": uid},
+                {"$inc": {f"cards.{c['card_code']}": 1}},
+                upsert=True
+            )
+
+        if fallen_cards:
+            await interaction.followup.send(
+                f"✧ the veil parts... fallen cards awaken for {group}"
+            )
+
+# ======================
 # READY
 # ======================
 @bot.event
@@ -376,3 +596,4 @@ async def on_ready():
     print("READY")
 
 bot.run(TOKEN)
+        
