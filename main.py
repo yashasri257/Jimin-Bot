@@ -64,16 +64,19 @@ def get_chances():
         return {"whisper":35,"cherub":30,"siren":20,"enthrall":10,"devotion":5}
 
 async def get_card():
-    chances = get_chances()
-    rarity = random.choices(list(chances), list(chances.values()))[0]
+    for _ in range(10):  # try multiple times
+        chances = get_chances()
+        rarity = random.choices(list(chances), list(chances.values()))[0]
 
-    res = await cards.aggregate([
-        {"$match":{"rarity":rarity,"droppable":True}},
-        {"$sample":{"size":1}}
-    ]).to_list(1)
+        res = await cards.aggregate([
+            {"$match":{"rarity":rarity,"droppable":True}},
+            {"$sample":{"size":1}}
+        ]).to_list(1)
 
-    return res[0] if res else None
+        if res:
+            return res[0]
 
+    return None
 # ======================
 # 🎴 BACK SYSTEM
 # ======================
@@ -343,3 +346,4 @@ async def on_ready():
     print("READY")
 
 bot.run(TOKEN)
+        
