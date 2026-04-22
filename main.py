@@ -19,8 +19,8 @@ print("TOKEN start:", TOKEN[:10] if TOKEN else None)
 # CONFIG
 # ======================
 
-TOKEN = "YOUR_TOKEN"
-MONGO = "YOUR_MONGO_URL"
+TOKEN = os.getenv("TOKEN")
+MONGO = os.getenv("MONGO")
 
 STAFF_IDS = [
     1106193228971122689,
