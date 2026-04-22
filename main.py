@@ -5,6 +5,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from PIL import Image
 from io import BytesIO
 import aiohttp
+import os
+
+TOKEN = os.getenv("TOKEN")
+print("TOKEN LOADED:", TOKEN[:10] if TOKEN else "NONE")
 
 # ======================
 # CONFIG
