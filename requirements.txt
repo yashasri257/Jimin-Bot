@@ -3,3 +3,4 @@ motor
 pillow
 aiohttp
 flask
+audioop-lts
