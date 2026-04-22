@@ -7,8 +7,13 @@ from io import BytesIO
 import aiohttp
 import os
 
-TOKEN = os.getenv("TOKEN")
-print("TOKEN LOADED:", TOKEN[:10] if TOKEN else "NONE")
+raw = os.getenv("TOKEN")
+print("TOKEN raw repr:", repr(raw))      # shows hidden chars
+print("TOKEN length:", len(raw) if raw else None)
+print("TOKEN has spaces?", (" " in raw) if raw else None)
+
+TOKEN = raw.strip() if raw else None     # remove any hidden whitespace
+print("TOKEN start:", TOKEN[:10] if TOKEN else None)
 
 # ======================
 # CONFIG
