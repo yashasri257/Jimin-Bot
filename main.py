@@ -681,6 +681,87 @@ async def revoke(
     await interaction.followup.send("✧ revoked successfully")
     await log(bot, log_text)
 
+@bot.tree.command(name="favourite", description="✧ set your favourites")
+async def favourite(
+    interaction: discord.Interaction,
+    group: str = None,
+    name: str = None,
+    card_code: str = None
+):
+
+    if not group and not name and not card_code:
+        # reset favourites
+        await users.update_one(
+            {"id": interaction.user.id},
+            {"$unset": {"favourite": ""}},
+            upsert=True
+        )
+        return await interaction.response.send_message("✧ favourites cleared")
+
+    fav_data = {}
+
+    if group:
+        fav_data["group"] = group.lower()
+
+    if name:
+        fav_data["name"] = name.lower()
+
+    if card_code:
+        card = await cards.find_one({"card_code": card_code})
+        if not card:
+            return await interaction.response.send_message("✧ invalid card code")
+        fav_data["card_code"] = card_code
+        fav_data["image"] = card["image_url"]
+
+    await users.update_one(
+        {"id": interaction.user.id},
+        {"$set": {"favourite": fav_data}},
+        upsert=True
+    )
+
+    await interaction.response.send_message("✧ favourites updated")
+
+@bot.tree.command(name="profile", description="✧ view your profile")
+async def profile(interaction: discord.Interaction, user: discord.User = None):
+
+    user = user or interaction.user
+    data = await users.find_one({"id": user.id}) or {}
+
+    cards_data = data.get("cards", {})
+    relics = data.get("relics", 0)
+    fav = data.get("favourite", {})
+
+    total_cards = sum(cards_data.values())
+
+    embed = discord.Embed(
+        title=f"✧ {user.name}'s profile ✧",
+        color=0x2b2d31
+    )
+
+    embed.add_field(name="✦ relics", value=f"{relics:,}", inline=True)
+    embed.add_field(name="✦ total cards", value=str(total_cards), inline=True)
+
+    # favourites
+    fav_text = ""
+
+    if fav.get("group"):
+        fav_text += f"✧ group: {fav['group']}\n"
+    if fav.get("name"):
+        fav_text += f"✧ idol: {fav['name']}\n"
+
+    embed.add_field(
+        name="✦ favourites",
+        value=fav_text if fav_text else "—",
+        inline=False
+    )
+
+    if fav.get("image"):
+        embed.set_image(url=fav["image"])
+
+    embed.set_footer(text="✧ curated presence")
+
+    await interaction.response.send_message(embed=embed)
+
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 # ======================
