@@ -1,5 +1,3 @@
-print("TOKEN:", TOKEN)
-print("MONGO:", MONGO)
 import discord, random, time, asyncio
 from discord.ext import commands
 from discord import app_commands
@@ -674,6 +672,8 @@ async def revoke(
     await interaction.followup.send("✧ revoked successfully")
     await log(bot, log_text)
 
+print("TOKEN:", TOKEN)
+print("MONGO:", MONGO)
 # ======================
 # READY
 # ======================
