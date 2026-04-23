@@ -59,17 +59,20 @@ BOARD_THEMES = {
     "default": {
         "bg": None,
         "player": "❌",
-        "bot": "⭕"
-    },
-    "aespa": {
-        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496872129289916586/Untitled31_20260423192447.png?ex=69eb764e&is=69ea24ce&hm=93fe588448b20a2981f1f95aa726efb5632ed2009845655806b2be3d3782449b&",
-        "player": "💗",
-        "bot": "🖤"
+        "bot": "⭕",
+        "price": 0
     },
     "bts": {
         "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496872097140441118/Untitled31_20260423192118.png?ex=69eb7646&is=69ea24c6&hm=519b015bf468bf834fd598b60c1619286fd01295a9a8bf587f6979f5487ba237&",
-        "player": "💜",
-        "bot": "🖤"
+        "player": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931002553995384/Untitled32_20260423214109.png?ex=69ebad22&is=69ea5ba2&hm=11d6e7ec6bebd53c1d15ebacecfea3938f8f70409f73ddee87173292789800da&",
+        "bot": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931052176937021/Untitled32_20260423214239.png?ex=69ebad2e&is=69ea5bae&hm=5b29ec5246671cc0d860e347003cc7514e93eaae3c8fb99b92fae5edff83ec91&",
+        "price": 5000
+    },
+    "aespa": {
+        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496873888460705912/Untitled31_20260423192447.png?ex=69eb77f1&is=69ea2671&hm=5244c8aca82acf5907cdde466cb14833eaff15c76d2d3df271b6c69b07b98b2c&",
+        "player": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931037551394916/Untitled32_20260423214229.png?ex=69ebad2a&is=69ea5baa&hm=9912dc9ebfe71c01981e645cf03ad7076775d1ee71251e11b95551e0070f4e6a&",
+        "bot": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931052176937021/Untitled32_20260423214239.png?ex=69ebad2e&is=69ea5bae&hm=5b29ec5246671cc0d860e347003cc7514e93eaae3c8fb99b92fae5edff83ec91&",
+        "price": 5000
     }
 }
 
@@ -1059,7 +1062,90 @@ async def tic_tac_toe(interaction: discord.Interaction):
         )
 
         await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")
-        
+
+@tree.command(name="themes", description="✧ view themes shop")
+async def themes(interaction: discord.Interaction):
+
+    embed = discord.Embed(
+        title="✧ theme shop",
+        description="buy aesthetic boards ✧ 5000 relics",
+        color=0x2b2d31
+    )
+
+    for name, data in BOARD_THEMES.items():
+        if name == "default":
+            continue
+        embed.add_field(
+            name=name.upper(),
+            value=f"{data['price']} relics",
+            inline=False
+        )
+
+    class ThemeView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+
+            for name in BOARD_THEMES:
+                if name == "default":
+                    continue
+                self.add_item(self.BuyBtn(name))
+
+        class BuyBtn(discord.ui.Button):
+            def __init__(self, theme_name):
+                super().__init__(label=f"buy {theme_name}", style=discord.ButtonStyle.secondary)
+                self.theme_name = theme_name
+
+            async def callback(self, interaction: discord.Interaction):
+
+                uid = interaction.user.id
+                user = await users.find_one({"id": uid}) or {}
+
+                owned = user.get("themes", [])
+
+                if self.theme_name in owned:
+                    return await interaction.response.send_message("✧ already owned", ephemeral=True)
+
+                price = BOARD_THEMES[self.theme_name]["price"]
+                coins = user.get("currency", 0)
+
+                if coins < price:
+                    return await interaction.response.send_message("✧ not enough relics", ephemeral=True)
+
+                await users.update_one(
+                    {"id": uid},
+                    {
+                        "$inc": {"currency": -price},
+                        "$push": {"themes": self.theme_name}
+                    },
+                    upsert=True
+                )
+
+                await interaction.response.send_message(f"✧ purchased {self.theme_name}")
+
+    await interaction.response.send_message(embed=embed, view=ThemeView())
+
+@tree.command(name="use_theme", description="✧ equip a theme")
+async def use_theme(interaction: discord.Interaction, theme: str):
+
+    uid = interaction.user.id
+    user = await users.find_one({"id": uid}) or {}
+
+    owned = user.get("themes", [])
+
+    if theme != "default" and theme not in owned:
+        return await interaction.response.send_message("✧ you don't own this theme")
+
+    if theme not in BOARD_THEMES:
+        return await interaction.response.send_message("✧ invalid theme")
+
+    await users.update_one(
+        {"id": uid},
+        {"$set": {"active_theme": theme}},
+        upsert=True
+    )
+
+    await interaction.response.send_message(f"✧ equipped {theme}")
+    o
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
