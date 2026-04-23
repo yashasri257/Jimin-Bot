@@ -52,11 +52,9 @@ RARITIES = ["whisper","cherub","siren","enthrall","devotion","eclipse","velour",
 # ======================
 # 🎮 TIC TAC TOE CONFIG
 # ======================
-
-TTT_CD = 1800  # 30 minutes
+TTT_CD = 1800
 ttt_cooldowns = {}
 
-async def draw_board(board, bg_url, player_img, bot_img):
 BOARD_THEMES = {
     "default": {
         "bg": None,
@@ -74,6 +72,7 @@ BOARD_THEMES = {
         "bot": "🖤"
     }
 }
+
 
 # ======================
 # BOT SETUP
@@ -110,7 +109,6 @@ def cd_left(last, cd):
 # 🎮 TIC TAC TOE HELPERS
 # ======================
 async def draw_board(board, bg_url, player_emoji, bot_emoji):
-
     size = 600
 
     # background
@@ -124,7 +122,6 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
 
     draw = ImageDraw.Draw(base)
 
-    # TRY LARGE FONT (this fixes tiny emoji issue)
     try:
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 140)
     except:
@@ -135,10 +132,8 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
             continue
 
         x, y = CELL_POS[i]
-
         emoji = player_emoji if val == "P" else bot_emoji
 
-        # center properly
         draw.text((x-50, y-70), emoji, font=font)
 
     buf = BytesIO()
@@ -146,27 +141,6 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
     buf.seek(0)
     return buf
 
-# ======================
-# FAST MERGE
-# ======================
-
-async def merge(urls):
-    async with aiohttp.ClientSession() as session:
-        imgs = []
-        for u in urls:
-            async with session.get(u) as r:
-                data = await r.read()
-                img = Image.open(BytesIO(data)).resize((300,420))
-                imgs.append(img)
-
-    canvas = Image.new("RGBA",(900,420))
-    for i,img in enumerate(imgs):
-        canvas.paste(img,(i*300,0))
-
-    buf = BytesIO()
-    canvas.save(buf,"PNG")
-    buf.seek(0)
-    return buf
 
 # ======================
 # GET CARD (FAST + SAFE)
