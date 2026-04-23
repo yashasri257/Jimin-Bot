@@ -775,17 +775,19 @@ async def on_ready():
 import threading
 from flask import Flask
 
-app = Flask('')
+app = Flask(__name__)
 
-@app.route('/')
+@app.route("/")
 def home():
-    return "Bot is alive"
+    return "alive"
 
 def run():
-    app.run(host='0.0.0.0', port=10000)
+    app.run(host="0.0.0.0", port=10000)
 
-threading.Thread(target=run).start()
-
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
+    
 keep_alive()
 
 if __name__ == "__main__":
