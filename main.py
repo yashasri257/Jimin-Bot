@@ -814,7 +814,7 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 @tree.command(name="tic_tac_toe", description="✧ challenge fate")
 async def tic_tac_toe(interaction: discord.Interaction):
 
-    await interaction.response.send_message("✧ game begins...")
+    await interaction.response.defer()  # ✅ VERY IMPORTANT
 
     player = interaction.user
     score = {"player":0, "bot":0}
@@ -827,20 +827,21 @@ async def tic_tac_toe(interaction: discord.Interaction):
         class Game(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60)
+                self.turn = turn
 
                 for i in range(9):
-                    self.add_item(self.Button(i))
+                    self.add_item(self.Btn(i))
 
-            class Button(discord.ui.Button):
+            class Btn(discord.ui.Button):
                 def __init__(self, index):
-                    super().__init__(label=" ", row=index//3)
+                    super().__init__(label="⬜", row=index//3)
                     self.index = index
 
                 async def callback(self, interaction: discord.Interaction):
                     view = self.view
 
                     if interaction.user.id != player.id:
-                        return await interaction.response.send_message("✧ not your game", ephemeral=True)
+                        return await interaction.response.send_message("✧ not yours", ephemeral=True)
 
                     if board[self.index] != "" or view.turn != "player":
                         return await interaction.response.defer()
@@ -851,17 +852,20 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
                     # player win
                     if check_win(board, "❌"):
-                        view.disable_all_items()
+                        view.disable_all()
                         score["player"] += 1
                         return await interaction.response.edit_message(
-                            content=f"✧ round {round_num}: you win",
+                            content=f"✧ round {round_num} — you win",
                             view=view
                         )
 
                     if "" not in board:
-                        return await interaction.response.edit_message(content=f"✧ round {round_num}: tie", view=view)
+                        return await interaction.response.edit_message(
+                            content=f"✧ round {round_num} — tie",
+                            view=view
+                        )
 
-                    # bot turn
+                    # bot move
                     view.turn = "bot"
                     move = bot_move(board)
                     board[move] = "⭕"
@@ -870,12 +874,11 @@ async def tic_tac_toe(interaction: discord.Interaction):
                     btn.label = "⭕"
                     btn.disabled = True
 
-                    # bot win
                     if check_win(board, "⭕"):
-                        view.disable_all_items()
+                        view.disable_all()
                         score["bot"] += 1
                         return await interaction.response.edit_message(
-                            content=f"✧ round {round_num}: bot wins",
+                            content=f"✧ round {round_num} — bot wins",
                             view=view
                         )
 
@@ -883,14 +886,13 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
                     await interaction.response.edit_message(view=view)
 
-            def disable_all_items(self):
+            def disable_all(self):
                 for i in self.children:
                     i.disabled = True
 
         view = Game()
-        view.turn = turn
 
-        # bot starts
+        # bot first move
         if turn == "bot":
             move = bot_move(board)
             board[move] = "⭕"
@@ -899,7 +901,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
             btn.disabled = True
             view.turn = "player"
 
-        await interaction.followup.send(
+        msg = await interaction.followup.send(
             content=f"✧ round {round_num} begins",
             view=view
         )
@@ -907,44 +909,38 @@ async def tic_tac_toe(interaction: discord.Interaction):
         # wait until round ends
         while True:
             await asyncio.sleep(1)
-            if view.is_finished() or all(i.disabled for i in view.children):
+            if all(i.disabled for i in view.children):
                 break
 
-    # 🎯 3 ROUNDS
-    for r in range(1, 4):
+        return msg
+
+    # 3 rounds
+    for r in range(1,4):
         await play_round(r)
         await asyncio.sleep(2)
 
-    # 🏆 RESULT
+    # result
     if score["player"] > score["bot"]:
-        reward = random.randint(1500, 3000)
-
-        card = await cards.aggregate([
-            {"$match":{"rarity":{"$in":["enthrall","devotion"]}}},
-            {"$sample":{"size":1}}
-        ]).to_list(1)
-
-        update = {"currency": reward}
-        if card:
-            update[f"cards.{card[0]['card_code']}"] = 1
+        reward = random.randint(1500,3000)
 
         await users.update_one(
-            {"user_id": player.id},
-            {"$inc": update},
+            {"id": player.id},
+            {"$inc":{"currency":reward}},
             upsert=True
         )
 
         await interaction.followup.send(
-            f"✧ victory\n{score['player']} - {score['bot']}\n+{reward} relics + card"
+            f"✧ victory {score['player']} - {score['bot']}\n+{reward} relics"
         )
 
     elif score["player"] < score["bot"]:
         await interaction.followup.send(
-            f"✧ defeat\n{score['player']} - {score['bot']}"
+            f"✧ defeat {score['player']} - {score['bot']}"
         )
+
     else:
         await interaction.followup.send(
-            f"✧ draw\n{score['player']} - {score['bot']}"
+            f"✧ draw {score['player']} - {score['bot']}"
         )
 
 print("TOKEN:", TOKEN)
