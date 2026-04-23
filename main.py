@@ -15,6 +15,12 @@ print("TOKEN has spaces?", (" " in raw) if raw else None)
 
 TOKEN = raw.strip() if raw else None     # remove any hidden whitespace
 print("TOKEN start:", TOKEN[:10] if TOKEN else None)
+# === TIC TAC TOE GRID POSITIONS (DO NOT TOUCH) ===
+CELL_POS = [
+    (100,100),(300,100),(500,100),
+    (100,300),(300,300),(500,300),
+    (100,500),(300,500),(500,500)
+]
 
 # ======================
 # CONFIG
@@ -49,17 +55,24 @@ RARITIES = ["whisper","cherub","siren","enthrall","devotion","eclipse","velour",
 TTT_CD = 1800  # 30 minutes
 ttt_cooldowns = {}
 
+async def draw_board(board, bg_url, player_img, bot_img):
 BOARD_THEMES = {
-    "default": {"bg": None, "price": 0},
-    "BTS": {"bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496872097140441118/Untitled31_20260423192118.png?ex=69eb7646&is=69ea24c6&hm=519b015bf468bf834fd598b60c1619286fd01295a9a8bf587f6979f5487ba237&", "price": 5000},
-    "aespa": {"bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496873888460705912/Untitled31_20260423192447.png?ex=69eb77f1&is=69ea2671&hm=5244c8aca82acf5907cdde466cb14833eaff15c76d2d3df271b6c69b07b98b2c&", "price": 5000}
+    "default": {
+        "bg": None,
+        "player_img": "assets/x.png",
+        "bot_img": "assets/o.png"
+    },
+    "blackpink": {
+        "bg": "PUT_YOUR_IMAGE_URL",
+        "player_img": "assets/pink.png",
+        "bot_img": "assets/black.png"
+    },
+    "bts": {
+        "bg": "PUT_YOUR_IMAGE_URL",
+        "player_img": "assets/purple.png",
+        "bot_img": "assets/black.png"
+    }
 }
-
-CELL_POS = [
-    (100,100), (300,100), (500,100),
-    (100,300), (300,300), (500,300),
-    (100,500), (300,500), (500,500)
-]
 
 # ======================
 # BOT SETUP
@@ -95,73 +108,34 @@ def cd_left(last, cd):
 # ======================
 # 🎮 TIC TAC TOE HELPERS
 # ======================
+async def draw_board(board, bg_url, player_img, bot_img):
 
-def check_win(board, p):
-    wins = [
-        [0,1,2],[3,4,5],[6,7,8],
-        [0,3,6],[1,4,7],[2,5,8],
-        [0,4,8],[2,4,6]
-    ]
-    return any(all(board[i]==p for i in w) for w in wins)
+    size = 600
 
-
-def bot_move(board, bot, player):
-
-    # win
-    for i in range(9):
-        if board[i] == "":
-            board[i] = bot
-            if check_win(board, bot):
-                board[i] = ""
-                return i
-            board[i] = ""
-
-    # block
-    for i in range(9):
-        if board[i] == "":
-            board[i] = player
-            if check_win(board, player):
-                board[i] = ""
-                return i
-            board[i] = ""
-
-    # corners
-    for i in [0,2,6,8]:
-        if board[i] == "":
-            return i
-
-    # center
-    if board[4] == "":
-        return 4
-
-    # edges
-    for i in [1,3,5,7]:
-        if board[i] == "":
-            return i
-
-
-async def draw_board(board, bg_url):
-
+    # background
     if bg_url:
         async with aiohttp.ClientSession() as session:
             async with session.get(bg_url) as r:
                 data = await r.read()
-                img = Image.open(BytesIO(data)).convert("RGBA").resize((600,600))
+                base = Image.open(BytesIO(data)).convert("RGBA").resize((size,size))
     else:
-        img = Image.new("RGBA",(600,600),(25,25,25))
+        base = Image.new("RGBA",(size,size),(25,25,25))
 
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.load_default()
+    # load icons
+    p_icon = Image.open(player_img).convert("RGBA").resize((120,120))
+    b_icon = Image.open(bot_img).convert("RGBA").resize((120,120))
 
     for i, val in enumerate(board):
         if val == "":
             continue
 
         x, y = CELL_POS[i]
-        draw.text((x-15,y-15), val, fill=(255,255,255), font=font)
+        icon = p_icon if val == "P" else b_icon
+
+        base.paste(icon, (x-60, y-60), icon)
 
     buf = BytesIO()
-    img.save(buf,"PNG")
+    base.save(buf,"PNG")
     buf.seek(0)
     return buf
 
@@ -873,142 +847,139 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 async def tic_tac_toe(interaction: discord.Interaction):
 
     await interaction.response.defer()
-
     uid = interaction.user.id
 
-    # cooldown
-    if uid in ttt_cooldowns and ttt_cooldowns[uid] > time.time():
-        left = int(ttt_cooldowns[uid] - time.time())
-        return await interaction.followup.send(f"✧ wait {left//60}m {left%60}s")
-
     user_data = await users.find_one({"id": uid}) or {}
-    theme = BOARD_THEMES.get(user_data.get("active_theme","default"))
+    theme_name = user_data.get("active_theme", "default")
+    theme = BOARD_THEMES.get(theme_name, BOARD_THEMES["default"])
+
     bg_url = theme["bg"]
+    player_img = theme["player_img"]
+    bot_img = theme["bot_img"]
 
-    # random symbols
-    if random.choice([True, False]):
-        player_symbol, bot_symbol = "X", "O"
-    else:
-        player_symbol, bot_symbol = "O", "X"
-
-    score = {"player":0, "bot":0}
+    total_wins = 0
 
     async def play_round(r):
 
-        board = [""]*9
-        turn = random.choice(["player","bot"])
+        board = [""] * 9
 
-        class View(discord.ui.View):
+        class GameView(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60)
-                self.turn = turn
 
                 for i in range(9):
-                    self.add_item(self.Btn(i))
+                    self.add_item(self.Cell(i))
 
-            class Btn(discord.ui.Button):
+            class Cell(discord.ui.Button):
                 def __init__(self, idx):
-                    super().__init__(label=str(idx+1), row=idx//3)
+                    super().__init__(
+                        label="‎",  # invisible label
+                        style=discord.ButtonStyle.secondary,
+                        row=idx//3
+                    )
                     self.idx = idx
 
                 async def callback(self, interaction: discord.Interaction):
 
-                    view = self.view
-
                     if interaction.user.id != uid:
                         return await interaction.response.send_message("✧ not yours", ephemeral=True)
 
-                    if board[self.idx] != "" or view.turn != "player":
+                    if board[self.idx] != "":
                         return await interaction.response.defer()
 
-                    board[self.idx] = player_symbol
+                    board[self.idx] = "P"
                     self.disabled = True
 
-                    if check_win(board, player_symbol):
-                        view.disable_all()
-                        score["player"] += 1
-                    elif "" not in board:
-                        view.disable_all()
-                    else:
-                        view.turn = "bot"
-                        m = bot_move(board, bot_symbol, player_symbol)
-                        board[m] = bot_symbol
-                        view.children[m].disabled = True
+                    # PLAYER WIN
+                    if check_win(board, "P"):
+                        self.view.disable_all()
+                        await end_round(interaction, True)
+                        return
 
-                        if check_win(board, bot_symbol):
-                            view.disable_all()
-                            score["bot"] += 1
+                    # BOT MOVE
+                    move = bot_move(board, "B", "P")
+                    if move is not None:
+                        board[move] = "B"
+                        self.view.children[move].disabled = True
 
-                        view.turn = "player"
+                    # BOT WIN
+                    if check_win(board, "B"):
+                        self.view.disable_all()
+                        await end_round(interaction, False)
+                        return
 
-                    img = await draw_board(board, bg_url)
+                    # DRAW
+                    if "" not in board:
+                        self.view.disable_all()
+                        await end_round(interaction, None)
+                        return
+
+                    # UPDATE IMAGE
+                    img = await draw_board(board, bg_url, player_img, bot_img)
                     file = discord.File(img, "board.png")
 
-                    embed = discord.Embed(
-                        title=f"✧ round {r}",
-                        description=f"you: {player_symbol} • bot: {bot_symbol}",
-                        color=0x2b2d31
+                    await interaction.response.edit_message(
+                        attachments=[file],
+                        view=self.view
                     )
-                    embed.set_image(url="attachment://board.png")
-
-                    await interaction.response.edit_message(embed=embed, view=view, attachments=[file])
 
             def disable_all(self):
-                for i in self.children:
-                    i.disabled = True
+                for item in self.children:
+                    item.disabled = True
 
-        view = View()
+        async def end_round(interaction, win):
+            nonlocal total_wins
 
-        if turn == "bot":
-            m = bot_move(board, bot_symbol, player_symbol)
-            board[m] = bot_symbol
-            view.children[m].disabled = True
-            view.turn = "player"
+            if win is True:
+                total_wins += 1
+                reward = random.randint(2000,4000)
 
-        img = await draw_board(board, bg_url)
+                await users.update_one(
+                    {"id": uid},
+                    {"$inc": {"currency": reward}},
+                    upsert=True
+                )
+
+                await interaction.followup.send(f"✧ round {r} win +{reward}")
+
+            elif win is False:
+                await interaction.followup.send(f"✧ round {r} lost")
+
+            else:
+                await interaction.followup.send(f"✧ round {r} draw")
+
+        view = GameView()
+
+        img = await draw_board(board, bg_url, player_img, bot_img)
         file = discord.File(img, "board.png")
 
-        embed = discord.Embed(
-            title=f"✧ round {r} begins",
-            description=f"you: {player_symbol} • bot: {bot_symbol}",
-            color=0x2b2d31
+        await interaction.followup.send(
+            content=f"✧ round {r}",
+            file=file,
+            view=view
         )
-        embed.set_image(url="attachment://board.png")
 
-        await interaction.followup.send(embed=embed, view=view, file=file)
-
+        # WAIT UNTIL ROUND ENDS
         while True:
             await asyncio.sleep(1)
             if all(i.disabled for i in view.children):
                 break
 
+    # 3 rounds
     for r in range(1,4):
         await play_round(r)
         await asyncio.sleep(2)
 
-    if score["player"] > score["bot"]:
-        reward = random.randint(1500,3000)
+    # PERFECT BONUS
+    if total_wins == 3:
+        bonus = 10000
 
         await users.update_one(
             {"id": uid},
-            {"$inc":{"currency":reward}},
-            upsert=True
+            {"$inc": {"currency": bonus}}
         )
 
-        ttt_cooldowns[uid] = time.time() + TTT_CD
-
-        await interaction.followup.send(
-            f"✧ victory {score['player']} - {score['bot']}\n+{reward} relics"
-        )
-
-    elif score["player"] < score["bot"]:
-        await interaction.followup.send(
-            f"✧ defeat {score['player']} - {score['bot']}"
-        )
-    else:
-        await interaction.followup.send(
-            f"✧ draw {score['player']} - {score['bot']}"
-        )
+        await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")
 
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
