@@ -342,7 +342,7 @@ async def inventory(
 
     target = user or interaction.user
 
-    data = await users.find_one({"user_id": target.id}) or {"cards": {}}
+    data = await users.find_one({"id": target.id}) or {"cards": {}}
     user_cards = data.get("cards", {})
 
     valid = {k:v for k,v in user_cards.items() if v > 0}
@@ -447,7 +447,7 @@ def format_time(sec):
 @tree.command(name="daily", description="✧ daily reward")
 async def daily(interaction: discord.Interaction):
 
-    await interaction.response.send_message("✧ blessing...")
+    await interaction.response.send_message("✧ descending...")
 
     uid = interaction.user.id
 
@@ -460,7 +460,7 @@ async def daily(interaction: discord.Interaction):
     reward = random.randint(500,800)
 
     await users.update_one(
-        {"user_id": uid},
+        {"id": uid},
         {"$inc": {"currency": reward}},
         upsert=True
     )
@@ -844,7 +844,7 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 @tree.command(name="tic_tac_toe", description="✧ play a fate game")
 async def tic_tac_toe(interaction: discord.Interaction):
 
-    await interaction.response.defer()
+    await interaction.response.send_message("✧ starting game...")
 
     uid = interaction.user.id
 
