@@ -1026,6 +1026,7 @@ async def on_ready():
         print(f"Synced {len(synced)} commands")
     except Exception as e:
         print("Sync error:", e)
+        await bot.tree.sync()
         
 import threading
 from flask import Flask
@@ -1046,7 +1047,5 @@ def keep_alive():
 keep_alive()
 
 if __name__ == "__main__":
-
-    await bot.tree.sync()
     bot.run(TOKEN)
     
