@@ -770,8 +770,7 @@ print("MONGO:", MONGO)
 
 @bot.event
 async def on_ready():
-    await tree.sync()
-    print("READY")
+    print(f"LOGGED IN AS {bot.user}")
     
 import threading
 from flask import Flask
@@ -787,5 +786,8 @@ def run():
 
 threading.Thread(target=run).start()
 
-bot.run(TOKEN)
+keep_alive()
+
+if __name__ == "__main__":
+    bot.run(TOKEN)
 
