@@ -739,4 +739,6 @@ def keep_alive():
     
 keep_alive()
 
-if __name__ == "__main_
+if __name__ == "__main__":
+    bot.run(TOKEN)
+    
