@@ -15,6 +15,7 @@ print("TOKEN has spaces?", (" " in raw) if raw else None)
 
 TOKEN = raw.strip() if raw else None     # remove any hidden whitespace
 print("TOKEN start:", TOKEN[:10] if TOKEN else None)
+
 # === TIC TAC TOE GRID POSITIONS (DO NOT TOUCH) ===
 CELL_POS = [
     (100,100),(300,100),(500,100),
@@ -59,18 +60,18 @@ async def draw_board(board, bg_url, player_img, bot_img):
 BOARD_THEMES = {
     "default": {
         "bg": None,
-        "player_img": "assets/x.png",
-        "bot_img": "assets/o.png"
+        "player": "❌",
+        "bot": "⭕"
     },
-    "blackpink": {
-        "bg": "PUT_YOUR_IMAGE_URL",
-        "player_img": "assets/pink.png",
-        "bot_img": "assets/black.png"
+    "aespa": {
+        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496872129289916586/Untitled31_20260423192447.png?ex=69eb764e&is=69ea24ce&hm=93fe588448b20a2981f1f95aa726efb5632ed2009845655806b2be3d3782449b&",
+        "player": "💗",
+        "bot": "🖤"
     },
     "bts": {
-        "bg": "PUT_YOUR_IMAGE_URL",
-        "player_img": "assets/purple.png",
-        "bot_img": "assets/black.png"
+        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496872097140441118/Untitled31_20260423192118.png?ex=69eb7646&is=69ea24c6&hm=519b015bf468bf834fd598b60c1619286fd01295a9a8bf587f6979f5487ba237&",
+        "player": "💜",
+        "bot": "🖤"
     }
 }
 
@@ -108,7 +109,7 @@ def cd_left(last, cd):
 # ======================
 # 🎮 TIC TAC TOE HELPERS
 # ======================
-async def draw_board(board, bg_url, player_img, bot_img):
+async def draw_board(board, bg_url, player_emoji, bot_emoji):
 
     size = 600
 
@@ -121,21 +122,27 @@ async def draw_board(board, bg_url, player_img, bot_img):
     else:
         base = Image.new("RGBA",(size,size),(25,25,25))
 
-    # load icons
-    p_icon = Image.open(player_img).convert("RGBA").resize((120,120))
-    b_icon = Image.open(bot_img).convert("RGBA").resize((120,120))
+    draw = ImageDraw.Draw(base)
+
+    # TRY LARGE FONT (this fixes tiny emoji issue)
+    try:
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 140)
+    except:
+        font = ImageFont.load_default()
 
     for i, val in enumerate(board):
         if val == "":
             continue
 
         x, y = CELL_POS[i]
-        icon = p_icon if val == "P" else b_icon
 
-        base.paste(icon, (x-60, y-60), icon)
+        emoji = player_emoji if val == "P" else bot_emoji
+
+        # center properly
+        draw.text((x-50, y-70), emoji, font=font)
 
     buf = BytesIO()
-    base.save(buf,"PNG")
+    base.save(buf, "PNG")
     buf.seek(0)
     return buf
 
@@ -854,8 +861,8 @@ async def tic_tac_toe(interaction: discord.Interaction):
     theme = BOARD_THEMES.get(theme_name, BOARD_THEMES["default"])
 
     bg_url = theme["bg"]
-    player_img = theme["player_img"]
-    bot_img = theme["bot_img"]
+    player_emoji = theme["player"]
+    bot_emoji = theme["bot"]
 
     total_wins = 0
 
@@ -950,7 +957,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
         view = GameView()
 
-        img = await draw_board(board, bg_url, player_img, bot_img)
+        img = await draw_board(board, bg_url, player_emoji, bot_emoji)
         file = discord.File(img, "board.png")
 
         await interaction.followup.send(
