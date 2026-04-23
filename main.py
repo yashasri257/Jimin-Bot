@@ -268,6 +268,11 @@ async def drop(interaction:discord.Interaction):
 # ======================
 # INVENTORY (FAST)
 # ======================
+from discord import app_commands
+import discord
+
+RARITIES = ["whisper","cherub","siren","enthrall","devotion","fallen","eclipse","velour","sanctum"]
+
 @bot.tree.command(name="inventory", description="✧ view a user's collection")
 @app_commands.describe(
     user="✧ whose inventory?",
@@ -277,10 +282,9 @@ async def drop(interaction:discord.Interaction):
     era="✧ era",
     dupes="✧ show duplicates only"
 )
-@app_commands.choices(rarity=[
-    app_commands.Choice(name=r, value=r.lower()) for r in
-    ["Whisper","Cherub","Siren","Enthrall","Devotion","Fallen","Eclipse","Velour","Sanctum"]
-])
+@app_commands.choices(
+    rarity=[app_commands.Choice(name=r.capitalize(), value=r) for r in RARITIES]
+)
 async def inventory(
     interaction: discord.Interaction,
     user: discord.Member = None,
@@ -290,27 +294,33 @@ async def inventory(
     era: str = None,
     dupes: bool = False
 ):
-    await interaction.response.defer()
+    await interaction.response.defer(thinking=True)
 
     target = user or interaction.user
-    data = await users.find_one({"user_id": target.id}) or {"cards": {}}
-    user_cards = data.get("cards", {})
 
-    if not user_cards:
+    user_data = await users.find_one({"user_id": target.id})
+    if not user_data or not user_data.get("cards"):
         return await interaction.followup.send("✧ nothing here yet...", ephemeral=True)
 
-    query = {"code": {"$in": list(user_cards.keys())}}
+    user_cards = user_data["cards"]
+
+    # only fetch cards user actually owns
+    codes = [code for code, count in user_cards.items() if count > 0]
+    if not codes:
+        return await interaction.followup.send("✧ nothing here yet...", ephemeral=True)
+
+    query = {"code": {"$in": codes}}
 
     if name:
-        query["name"] = {"$regex": f"^{name}$", "$options": "i"}
+        query["name"] = {"$regex": name, "$options": "i"}
     if group:
-        query["group"] = {"$regex": f"^{group}$", "$options": "i"}
+        query["group"] = {"$regex": group, "$options": "i"}
     if rarity:
         query["rarity"] = rarity.value
     if era:
-        query["era"] = {"$regex": f"^{era}$", "$options": "i"}
+        query["era"] = {"$regex": era, "$options": "i"}
 
-    cards_data = await cards.find(query).to_list(None)
+    cards_data = await cards.find(query).to_list(length=None)
 
     result = []
 
@@ -318,30 +328,34 @@ async def inventory(
         copies = user_cards.get(c["code"], 0)
 
         if copies <= 0:
-            continue  # ❌ FIX: removes 0 copy bug
+            continue  # remove 0 bug
 
         if dupes:
-            dup = copies - 1
-            if dup <= 0:
+            d = copies - 1
+            if d <= 0:
                 continue
-            count_display = f"{dup} dupes"
+            count_text = f"{d} dupes"
         else:
-            count_display = f"{copies} copies"
+            count_text = f"{copies} copies"
 
-        line = f"✧ **{c['group']}** — {c['name']} 〔{c['rarity']}〕\n`{c['code']}` • {count_display}"
+        line = (
+            f"✧ **{c['group']}** ⟡ {c['name']}\n"
+            f"〔{c['rarity'].capitalize()}〕 • `{c['code']}` • {count_text}"
+        )
+
         result.append(line)
 
     if not result:
         return await interaction.followup.send("✧ nothing matches your filters...", ephemeral=True)
 
-    # sort alphabetically by group
-    result.sort()
+    # sort by group alphabetically
+    result.sort(key=lambda x: x.lower())
 
     # pagination
-    chunk_size = 7
+    chunk_size = 6
     pages = [result[i:i+chunk_size] for i in range(0, len(result), chunk_size)]
 
-    class View(discord.ui.View):
+    class InventoryView(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=120)
             self.page = 0
@@ -352,42 +366,46 @@ async def inventory(
                 color=0x2b2d31
             )
             embed.set_author(
-                name=f"{target.name}'s inventory ✧",
+                name=f"{target.name}'s archive ✧",
                 icon_url=target.display_avatar.url
             )
             embed.set_footer(
-                text=f"page {self.page+1}/{len(pages)} • total cards: {len(result)}"
+                text=f"{self.page+1}/{len(pages)} • total: {len(result)} cards"
             )
-            await interaction.response.edit_message(embed=embed, view=self)
+
+            await interaction.response.defer()  # prevent button error
+            await interaction.edit_original_response(embed=embed, view=self)
 
         @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
-        async def prev(self, interaction, button):
-            if interaction.user != target:
+        async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user.id != target.id:
                 return await interaction.response.send_message("✧ not yours", ephemeral=True)
+
             if self.page > 0:
                 self.page -= 1
             await self.update(interaction)
 
         @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
-        async def next(self, interaction, button):
-            if interaction.user != target:
+        async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user.id != target.id:
                 return await interaction.response.send_message("✧ not yours", ephemeral=True)
-            if self.page < len(pages)-1:
+
+            if self.page < len(pages) - 1:
                 self.page += 1
             await self.update(interaction)
 
-    view = View()
+    view = InventoryView()
 
     embed = discord.Embed(
         description="\n\n".join(pages[0]),
         color=0x2b2d31
     )
     embed.set_author(
-        name=f"{target.name}'s inventory ✧",
+        name=f"{target.name}'s archive ✧",
         icon_url=target.display_avatar.url
     )
     embed.set_footer(
-        text=f"page 1/{len(pages)} • total cards: {len(result)}"
+        text=f"1/{len(pages)} • total: {len(result)} cards"
     )
 
     await interaction.followup.send(embed=embed, view=view)
