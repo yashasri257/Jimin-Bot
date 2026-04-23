@@ -842,11 +842,17 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 async def tic_tac_toe(interaction: discord.Interaction):
 
     await interaction.response.defer()
+
     uid = interaction.user.id
 
+    # cooldown
+    if uid in ttt_cooldowns and ttt_cooldowns[uid] > time.time():
+        left = int(ttt_cooldowns[uid] - time.time())
+        return await interaction.followup.send(f"✧ wait {left//60}m {left%60}s")
+
     user_data = await users.find_one({"id": uid}) or {}
-    theme_name = user_data.get("active_theme", "default")
-    theme = BOARD_THEMES.get(theme_name, BOARD_THEMES["default"])
+
+    theme = BOARD_THEMES.get(user_data.get("active_theme","default"))
 
     bg_url = theme["bg"]
     player_emoji = theme["player"]
@@ -854,24 +860,91 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
     total_wins = 0
 
-    async def play_round(r):
+    async def draw_board(board):
+        size = 600
 
-        board = [""] * 9
+        if bg_url:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(bg_url) as r:
+                    data = await r.read()
+                    base = Image.open(BytesIO(data)).convert("RGBA").resize((size,size))
+        else:
+            base = Image.new("RGBA",(size,size),(25,25,25))
+
+        draw = ImageDraw.Draw(base)
+
+        try:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", 140)
+        except:
+            font = ImageFont.load_default()
+
+        for i, val in enumerate(board):
+            if val == "":
+                continue
+
+            x, y = CELL_POS[i]
+            emoji = player_emoji if val == "P" else bot_emoji
+
+            draw.text((x-50, y-70), emoji, font=font)
+
+        buf = BytesIO()
+        base.save(buf, "PNG")
+        buf.seek(0)
+        return buf
+
+    def check_win(board, p):
+        wins = [
+            [0,1,2],[3,4,5],[6,7,8],
+            [0,3,6],[1,4,7],[2,5,8],
+            [0,4,8],[2,4,6]
+        ]
+        return any(all(board[i]==p for i in w) for w in wins)
+
+    def bot_move(board):
+        # win
+        for i in range(9):
+            if board[i] == "":
+                board[i] = "B"
+                if check_win(board,"B"):
+                    board[i] = ""
+                    return i
+                board[i] = ""
+
+        # block
+        for i in range(9):
+            if board[i] == "":
+                board[i] = "P"
+                if check_win(board,"P"):
+                    board[i] = ""
+                    return i
+                board[i] = ""
+
+        for i in [0,2,6,8]:
+            if board[i] == "":
+                return i
+
+        if board[4] == "":
+            return 4
+
+        for i in [1,3,5,7]:
+            if board[i] == "":
+                return i
+
+    async def play_round(r):
+        nonlocal total_wins
+
+        board = [""]*9
 
         class GameView(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60)
 
                 for i in range(9):
-                    self.add_item(self.Cell(i))
+                    self.add_item(self.Btn(i))
 
-            class Cell(discord.ui.Button):
+            class Btn(discord.ui.Button):
                 def __init__(self, idx):
-                    super().__init__(
-                        label="‎",  # invisible label
-                        style=discord.ButtonStyle.secondary,
-                        row=idx//3
-                    )
+                    super().__init__(label=" ", row=idx//3)
                     self.idx = idx
 
                 async def callback(self, interaction: discord.Interaction):
@@ -888,14 +961,20 @@ async def tic_tac_toe(interaction: discord.Interaction):
                     # PLAYER WIN
                     if check_win(board, "P"):
                         self.view.disable_all()
+                        total_wins += 1
                         await end_round(interaction, True)
                         return
 
+                    # DRAW
+                    if "" not in board:
+                        self.view.disable_all()
+                        await end_round(interaction, None)
+                        return
+
                     # BOT MOVE
-                    move = bot_move(board, "B", "P")
-                    if move is not None:
-                        board[move] = "B"
-                        self.view.children[move].disabled = True
+                    move = bot_move(board)
+                    board[move] = "B"
+                    self.view.children[move].disabled = True
 
                     # BOT WIN
                     if check_win(board, "B"):
@@ -910,27 +989,25 @@ async def tic_tac_toe(interaction: discord.Interaction):
                         return
 
                     # UPDATE IMAGE
-                    img = await draw_board(board, bg_url, player_img, bot_img)
+                    img = await draw_board(board)
                     file = discord.File(img, "board.png")
 
                     embed = discord.Embed(color=0x2b2d31)
-embed.set_image(url="attachment://board.png")
+                    embed.set_image(url="attachment://board.png")
 
-await interaction.response.edit_message(
-    embed=embed,
-    attachments=[file],
-    view=view
-)
+                    await interaction.message.edit(
+                        embed=embed,
+                        attachments=[file],
+                        view=self.view
+                    )
 
             def disable_all(self):
-                for item in self.children:
-                    item.disabled = True
+                for i in self.children:
+                    i.disabled = True
 
         async def end_round(interaction, win):
-            nonlocal total_wins
 
             if win is True:
-                total_wins += 1
                 reward = random.randint(2000,4000)
 
                 await users.update_one(
@@ -949,33 +1026,30 @@ await interaction.response.edit_message(
 
         view = GameView()
 
-        img = await draw_board(board, bg_url, player_emoji, bot_emoji)
+        img = await draw_board(board)
         file = discord.File(img, "board.png")
 
         embed = discord.Embed(
-    title=f"✧ round {r}",
-    color=0x2b2d31
-)
-embed.set_image(url="attachment://board.png")
+            title=f"✧ round {r}",
+            color=0x2b2d31
+        )
+        embed.set_image(url="attachment://board.png")
 
-await interaction.followup.send(
-    embed=embed,
-    file=file,
-    view=view
-)
+        await interaction.followup.send(
+            embed=embed,
+            file=file,
+            view=view
+        )
 
-        # WAIT UNTIL ROUND ENDS
         while True:
             await asyncio.sleep(1)
             if all(i.disabled for i in view.children):
                 break
 
-    # 3 rounds
     for r in range(1,4):
         await play_round(r)
         await asyncio.sleep(2)
 
-    # PERFECT BONUS
     if total_wins == 3:
         bonus = 10000
 
@@ -985,7 +1059,7 @@ await interaction.followup.send(
         )
 
         await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")
-
+        
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
