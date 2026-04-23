@@ -913,7 +913,13 @@ print("MONGO:", MONGO)
 @bot.event
 async def on_ready():
     print(f"LOGGED IN AS {bot.user}")
-    
+
+    try:
+        synced = await bot.tree.sync()
+        print(f"✧ synced {len(synced)} commands")
+    except Exception as e:
+        print(f"sync error:", e)
+        
 import threading
 from flask import Flask
 
