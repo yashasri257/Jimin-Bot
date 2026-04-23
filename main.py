@@ -105,6 +105,20 @@ def now():
 def cd_left(last, cd):
     return max(0, cd - (now() - last))
 
+cooldowns = {}
+
+async def check_cd(uid, key, cd):
+    user = await users.find_one({"id": uid}) or {}
+    last = user.get(f"{key}_cd", 0)
+    return max(0, cd - (now() - last))
+
+async def set_cooldown(uid, key):
+    await users.update_one(
+        {"id": uid},
+        {"$set": {f"{key}_cd": now()}},
+        upsert=True
+    )
+    
 # ======================
 # 🎮 TIC TAC TOE HELPERS
 # ======================
@@ -899,10 +913,14 @@ async def tic_tac_toe(interaction: discord.Interaction):
                     img = await draw_board(board, bg_url, player_img, bot_img)
                     file = discord.File(img, "board.png")
 
-                    await interaction.response.edit_message(
-                        attachments=[file],
-                        view=self.view
-                    )
+                    embed = discord.Embed(color=0x2b2d31)
+embed.set_image(url="attachment://board.png")
+
+await interaction.response.edit_message(
+    embed=embed,
+    attachments=[file],
+    view=view
+)
 
             def disable_all(self):
                 for item in self.children:
@@ -934,11 +952,17 @@ async def tic_tac_toe(interaction: discord.Interaction):
         img = await draw_board(board, bg_url, player_emoji, bot_emoji)
         file = discord.File(img, "board.png")
 
-        await interaction.followup.send(
-            content=f"✧ round {r}",
-            file=file,
-            view=view
-        )
+        embed = discord.Embed(
+    title=f"✧ round {r}",
+    color=0x2b2d31
+)
+embed.set_image(url="attachment://board.png")
+
+await interaction.followup.send(
+    embed=embed,
+    file=file,
+    view=view
+)
 
         # WAIT UNTIL ROUND ENDS
         while True:
