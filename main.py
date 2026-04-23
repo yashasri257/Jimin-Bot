@@ -84,30 +84,26 @@ def check_win(board, p):
     ]
     return any(all(board[i]==p for i in w) for w in wins)
 
-
 def bot_move(board):
-    # try to win
     for i in range(9):
         if board[i] == "":
-            board[i] = "O"
-            if check_win(board,"O"):
-                return i
-            board[i] = ""
-
-    # block player
-    for i in range(9):
-        if board[i] == "":
-            board[i] = "X"
-            if check_win(board,"X"):
+            board[i] = "⭕"
+            if check_win(board,"⭕"):
                 board[i] = ""
                 return i
             board[i] = ""
 
-    # take center
+    for i in range(9):
+        if board[i] == "":
+            board[i] = "❌"
+            if check_win(board,"❌"):
+                board[i] = ""
+                return i
+            board[i] = ""
+
     if board[4] == "":
         return 4
 
-    # random move
     empty = [i for i,v in enumerate(board) if v==""]
     return random.choice(empty)
 
@@ -815,73 +811,113 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # ======================
 # tictactoe 
 # ======================
-@tree.command(name="tic_tac_toe", description="✧ play fate game")
-async def ttt(interaction: discord.Interaction, user: discord.Member=None):
+@tree.command(name="tic_tac_toe", description="✧ challenge fate")
+async def tic_tac_toe(interaction: discord.Interaction):
 
-    await interaction.response.defer()
+    await interaction.response.send_message("✧ game begins...")
 
-    opponent = user or bot.user
     player = interaction.user
+    score = {"player":0, "bot":0}
 
-    wins = {"player":0, "bot":0}
+    async def play_round(round_num):
 
-    async def play_round():
-        board = [""]*9
+        board = [""] * 9
+        turn = "player" if random.choice([True, False]) else "bot"
 
         class Game(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60)
 
-            async def move(self, interaction, idx):
-                if board[idx] != "":
-                    return await interaction.response.send_message("taken", ephemeral=True)
+                for i in range(9):
+                    self.add_item(self.Button(i))
 
-                board[idx] = "X"
+            class Button(discord.ui.Button):
+                def __init__(self, index):
+                    super().__init__(label=" ", row=index//3)
+                    self.index = index
 
-                if check_win(board,"X"):
-                    wins["player"] += 1
-                    return await interaction.response.edit_message(content="you win this round", view=None)
+                async def callback(self, interaction: discord.Interaction):
+                    view = self.view
 
-                if "" not in board:
-                    return await interaction.response.edit_message(content="tie", view=None)
+                    if interaction.user.id != player.id:
+                        return await interaction.response.send_message("✧ not your game", ephemeral=True)
 
-                b = bot_move(board)
-                board[b] = "O"
+                    if board[self.index] != "" or view.turn != "player":
+                        return await interaction.response.defer()
 
-                if check_win(board,"O"):
-                    wins["bot"] += 1
-                    return await interaction.response.edit_message(content="bot wins this round", view=None)
+                    board[self.index] = "❌"
+                    self.label = "❌"
+                    self.disabled = True
 
-                await interaction.response.edit_message(content=str(board), view=self)
+                    # player win
+                    if check_win(board, "❌"):
+                        view.disable_all_items()
+                        score["player"] += 1
+                        return await interaction.response.edit_message(
+                            content=f"✧ round {round_num}: you win",
+                            view=view
+                        )
 
-            @discord.ui.button(label="1")
-            async def b1(self,i,b): await self.move(i,0)
-            @discord.ui.button(label="2")
-            async def b2(self,i,b): await self.move(i,1)
-            @discord.ui.button(label="3")
-            async def b3(self,i,b): await self.move(i,2)
-            @discord.ui.button(label="4")
-            async def b4(self,i,b): await self.move(i,3)
-            @discord.ui.button(label="5")
-            async def b5(self,i,b): await self.move(i,4)
-            @discord.ui.button(label="6")
-            async def b6(self,i,b): await self.move(i,5)
-            @discord.ui.button(label="7")
-            async def b7(self,i,b): await self.move(i,6)
-            @discord.ui.button(label="8")
-            async def b8(self,i,b): await self.move(i,7)
-            @discord.ui.button(label="9")
-            async def b9(self,i,b): await self.move(i,8)
+                    if "" not in board:
+                        return await interaction.response.edit_message(content=f"✧ round {round_num}: tie", view=view)
 
-        await interaction.followup.send("✧ round begins", view=Game())
+                    # bot turn
+                    view.turn = "bot"
+                    move = bot_move(board)
+                    board[move] = "⭕"
 
-    # 3 rounds
-    for _ in range(3):
-        await play_round()
+                    btn = view.children[move]
+                    btn.label = "⭕"
+                    btn.disabled = True
 
-    # result
-    if wins["player"] > wins["bot"]:
-        reward = random.randint(1500,3000)
+                    # bot win
+                    if check_win(board, "⭕"):
+                        view.disable_all_items()
+                        score["bot"] += 1
+                        return await interaction.response.edit_message(
+                            content=f"✧ round {round_num}: bot wins",
+                            view=view
+                        )
+
+                    view.turn = "player"
+
+                    await interaction.response.edit_message(view=view)
+
+            def disable_all_items(self):
+                for i in self.children:
+                    i.disabled = True
+
+        view = Game()
+        view.turn = turn
+
+        # bot starts
+        if turn == "bot":
+            move = bot_move(board)
+            board[move] = "⭕"
+            btn = view.children[move]
+            btn.label = "⭕"
+            btn.disabled = True
+            view.turn = "player"
+
+        await interaction.followup.send(
+            content=f"✧ round {round_num} begins",
+            view=view
+        )
+
+        # wait until round ends
+        while True:
+            await asyncio.sleep(1)
+            if view.is_finished() or all(i.disabled for i in view.children):
+                break
+
+    # 🎯 3 ROUNDS
+    for r in range(1, 4):
+        await play_round(r)
+        await asyncio.sleep(2)
+
+    # 🏆 RESULT
+    if score["player"] > score["bot"]:
+        reward = random.randint(1500, 3000)
 
         card = await cards.aggregate([
             {"$match":{"rarity":{"$in":["enthrall","devotion"]}}},
@@ -893,15 +929,23 @@ async def ttt(interaction: discord.Interaction, user: discord.Member=None):
             update[f"cards.{card[0]['card_code']}"] = 1
 
         await users.update_one(
-            {"user_id": interaction.user.id},
+            {"user_id": player.id},
             {"$inc": update},
             upsert=True
         )
 
-        await interaction.followup.send(f"✧ victory\n+{reward} relics + card")
+        await interaction.followup.send(
+            f"✧ victory\n{score['player']} - {score['bot']}\n+{reward} relics + card"
+        )
 
+    elif score["player"] < score["bot"]:
+        await interaction.followup.send(
+            f"✧ defeat\n{score['player']} - {score['bot']}"
+        )
     else:
-        await interaction.followup.send("✧ fate denied")
+        await interaction.followup.send(
+            f"✧ draw\n{score['player']} - {score['bot']}"
+        )
 
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
