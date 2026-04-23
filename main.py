@@ -803,7 +803,7 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
     data = await users.find_one({"id": user.id}) or {}
 
     cards_data = data.get("cards", {})
-    relics = data.get("relics", 0)
+    relics = data.get("currency", 0)
     fav = data.get("favourite", {})
 
     total_cards = sum(cards_data.values())
