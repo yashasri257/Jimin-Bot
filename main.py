@@ -120,33 +120,27 @@ async def get_card():
 # ======================
 
 @tree.command(name="add_card", description="✧ add a new card (staff)")
-async def add_card(
-    interaction: discord.Interaction,
-    name: str,
-    group: str,
-    rarity: str,
-    card_code: str,
-    image_url: str,
-    droppable: bool,
-    rarity_back: str = None,
-    era: str = None
-):
+async def add_card(interaction: discord.Interaction,
+    name: str, group: str, rarity: str,
+    card_code: str, image_url: str,
+    droppable: bool, rarity_back: str = None, era: str = None):
+
     if not is_staff(interaction.user.id):
         return await interaction.response.send_message("✧ no permission", ephemeral=True)
 
     await cards.insert_one({
-        "name":name,
-        "group":group.lower(),
-        "rarity":rarity.lower(),
-        "card_code":card_code,
-        "image_url":image_url,
-        "droppable":droppable,
-        "rarity_back":rarity_back,
-        "era":era
+        "name": name,
+        "group": group.lower(),
+        "rarity": rarity.lower(),
+        "card_code": card_code.lower(),
+        "image_url": image_url,
+        "droppable": droppable,
+        "rarity_back": rarity_back,
+        "era": era
     })
 
     await interaction.response.send_message("✧ card added")
-
+        
 # ======================
 # DELETE
 # ======================
@@ -227,14 +221,14 @@ class DropView(discord.ui.View):
     async def b3(self,i,b): await self.handle(i,2)
 
 @tree.command(name="drop", description="✧ summon cards")
-async def drop(interaction:discord.Interaction):
+async def drop(interaction: discord.Interaction):
 
-    await interaction.response.defer()
+    await interaction.response.send_message("✧ summoning...")
 
     uid = interaction.user.id
 
     if cd_left(last_drop.get(uid,0), DROP_CD) > 0:
-        return await interaction.followup.send("✧ return later...")
+        return await interaction.edit_original_response(content="✧ return later...")
 
     last_drop[uid] = now()
 
@@ -242,13 +236,13 @@ async def drop(interaction:discord.Interaction):
     for _ in range(3):
         c = await get_card()
         if not c:
-            return await interaction.followup.send("✧ no cards yet")
+            return await interaction.edit_original_response(content="✧ no cards yet")
         chosen.append(c)
 
-    backs = [c.get("rarity_back") for c in chosen]
+    backs = [c["rarity_back"] for c in chosen]
     img = await merge(backs)
 
-    file = discord.File(img,"drop.png")
+    file = discord.File(img, "drop.png")
 
     e = discord.Embed(
         title="✧ ethereal descent ✧",
@@ -259,171 +253,91 @@ async def drop(interaction:discord.Interaction):
     for i,c in enumerate(chosen,1):
         e.add_field(name=f"{i}. {c['rarity']}", value=c["group"])
 
-    await interaction.followup.send(
+    await interaction.edit_original_response(
+        content=None,
         embed=e,
-        file=file,
+        attachments=[file],
         view=DropView(chosen, uid)
     )
 
 # ======================
 # INVENTORY (FAST)
 # ======================
-@bot.tree.command(name="inventory", description="✧ view a user's collection")
-@app_commands.describe(
-    user="✧ whose inventory?",
-    name="✧ idol name",
-    group="✧ group name",
-    rarity="✧ rarity tier",
-    era="✧ era",
-    dupes="✧ show duplicates only"
-)
-@app_commands.choices(
-    rarity=[app_commands.Choice(name=r, value=r.lower()) for r in
-    ["Whisper","Cherub","Siren","Enthrall","Devotion","Fallen","Eclipse","Velour","Sanctum"]
-])
-async def inventory(interaction: discord.Interaction, user: discord.Member=None,
-                    name: str=None, group: str=None,
-                    rarity: app_commands.Choice[str]=None,
-                    era: str=None, dupes: bool=False):
-
-    await interaction.response.defer(thinking=True)
+@tree.command(name="inventory", description="✧ view collection")
+async def inventory(interaction: discord.Interaction, user: discord.Member=None):
 
     target = user or interaction.user
+
+    await interaction.response.send_message("✧ gathering...")
+
     data = await users.find_one({"user_id": target.id}) or {"cards": {}}
-    user_cards = data.get("cards", {})
+    cards_map = data.get("cards", {})
 
-    codes = [c for c,v in user_cards.items() if v > 0]
-    if not codes:
-        return await interaction.followup.send("✧ nothing here yet...", ephemeral=True)
+    valid = {k:v for k,v in cards_map.items() if v > 0}
 
-    query = {"code": {"$in": codes}}
+    if not valid:
+        return await interaction.edit_original_response(content="✧ empty...")
 
-    if name:
-        query["name"] = {"$regex": name, "$options": "i"}
-    if group:
-        query["group"] = {"$regex": group, "$options": "i"}
-    if rarity:
-        query["rarity"] = rarity.value
-    if era:
-        query["era"] = {"$regex": era, "$options": "i"}
+    found = await cards.find({
+        "card_code": {"$in": list(valid.keys())}
+    }).to_list(None)
 
-    cards_data = await cards.find(query).to_list(length=None)
+    lines = []
 
-    result = []
-    for c in cards_data:
-        copies = user_cards.get(c["code"], 0)
-        if copies <= 0:
-            continue
-
-        if dupes:
-            d = copies - 1
-            if d <= 0:
-                continue
-            count = f"{d} dupes"
-        else:
-            count = f"{copies} copies"
-
-        result.append(
-            f"✧ **{c['group']}** ⟡ {c['name']}\n〔{c['rarity']}〕 • `{c['code']}` • {count}"
+    for c in found:
+        count = valid.get(c["card_code"], 0)
+        lines.append(
+            f"✧ **{c['group']}** ⟡ {c['name']}\n"
+            f"〔{c['rarity']}〕 • `{c['card_code']}` • {count} copies"
         )
 
-    if not result:
-        return await interaction.followup.send("✧ nothing matches your filters...", ephemeral=True)
+    lines.sort()
 
-    result.sort()
-    pages = [result[i:i+6] for i in range(0, len(result), 6)]
-
-    def make_embed(page):
-        embed = discord.Embed(
-            description="\n\n".join(pages[page]),
-            color=0x2b2d31
-        )
-        embed.set_author(
-            name=f"{target.name}'s archive ✧",
-            icon_url=target.display_avatar.url
-        )
-        embed.set_footer(
-            text=f"{page+1}/{len(pages)} • total: {len(result)} cards"
-        )
-        return embed
-
-    class View(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=120)
-            self.page = 0
-
-        @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
-        async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user.id != target.id:
-                return await interaction.response.send_message("✧ not yours", ephemeral=True)
-
-            if self.page > 0:
-                self.page -= 1
-
-            await interaction.response.edit_message(
-                embed=make_embed(self.page),
-                view=self
-            )
-
-        @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
-        async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if interaction.user.id != target.id:
-                return await interaction.response.send_message("✧ not yours", ephemeral=True)
-
-            if self.page < len(pages)-1:
-                self.page += 1
-
-            await interaction.response.edit_message(
-                embed=make_embed(self.page),
-                view=self
-            )
-
-    await interaction.followup.send(
-        embed=make_embed(0),
-        view=View()
+    embed = discord.Embed(
+        description="\n\n".join(lines[:10]),
+        color=0x2b2d31
     )
-                        
+    embed.set_author(
+        name=f"{target.name}'s archive ✧",
+        icon_url=target.display_avatar.url
+    )
 
+    await interaction.edit_original_response(content=None, embed=embed)
+    
 # ======================
 # VIEW
 # ======================
-@bot.tree.command(name="view", description="✧ reveal a card")
-@app_commands.describe(card_code="✧ enter the card code")
+@tree.command(name="view", description="✧ reveal a card")
 async def view(interaction: discord.Interaction, card_code: str):
 
-    await interaction.response.defer(thinking=True)
+    await interaction.response.send_message("✧ revealing...")
 
-    code = card_code.lower().strip()
+    code = card_code.lower()
 
-    card = await cards.find_one({"code": code})
+    card = await cards.find_one({"card_code": code})
     if not card:
-        return await interaction.followup.send("✧ that card does not exist...", ephemeral=True)
+        return await interaction.edit_original_response(content="✧ invalid card")
 
-    user_data = await users.find_one({"user_id": interaction.user.id}) or {"cards": {}}
-    copies = user_data.get("cards", {}).get(code, 0)
+    data = await users.find_one({"user_id": interaction.user.id}) or {"cards": {}}
+    copies = data.get("cards", {}).get(code, 0)
 
-    # ✨ TEXT MESSAGE (outside embed)
-    text_msg = f"✧ {interaction.user.mention} owns **{copies}** copies of this card"
-
-    # ✨ EMBED (aesthetic)
     embed = discord.Embed(
         title="✧ card archive",
         description=(
             f"**name** ⟡ {card['name']}\n"
             f"**group** ⟡ {card['group']}\n"
-            f"**rarity** ⟡ {card['rarity'].capitalize()}\n"
+            f"**rarity** ⟡ {card['rarity']}\n"
             f"**era** ⟡ {card.get('era') or '—'}"
         ),
         color=0x2b2d31
     )
 
     embed.set_image(url=card["image_url"])
-    embed.set_footer(text=f"code ⟡ {card['code']}")
 
-    # ✨ SEND BOTH TOGETHER
-    await interaction.followup.send(content=text_msg, embed=embed)
-
-
+    await interaction.edit_original_response(
+        content=f"✧ you own {copies} copies",
+        embed=embed
+    )
 # =========================
 # ⏳ TIME FORMAT
 # =========================
@@ -437,53 +351,32 @@ def format_time(sec):
 # =========================
 # 🎁 DAILY
 # =========================
-
-@tree.command(name="daily", description="✧ claim your daily relics")
+@tree.command(name="daily", description="✧ daily reward")
 async def daily(interaction: discord.Interaction):
 
-    await interaction.response.defer()
+    await interaction.response.send_message("✧ blessing...")
 
     uid = interaction.user.id
 
     left = await check_cd(uid, "daily", DAILY_CD)
     if left > 0:
-        return await interaction.followup.send(
-            f"✧ return later... {format_time(left)}"
-        )
+        return await interaction.edit_original_response(content=f"✧ wait {format_time(left)}")
 
     await set_cooldown(uid, "daily")
 
-    reward = random.randint(500, 800)
-
-    res = await cards.aggregate([
-        {"$match":{"rarity":{"$in":["siren","enthrall","devotion"]}}},
-        {"$sample":{"size":1}}
-    ]).to_list(1)
-
-    card = res[0] if res else None
-
-    update = {"currency": reward}
-    if card:
-        update[f"cards.{card['card_code']}"] = 1
+    reward = random.randint(500,800)
 
     await users.update_one(
-        {"id": uid},
-        {"$inc": update},
+        {"user_id": uid},
+        {"$inc": {"currency": reward}},
         upsert=True
     )
 
-    e = discord.Embed(
-        title="✧ daily blessing ✧",
-        description=f"+{reward} {CURRENCY}",
-        color=0x2b2d31
+    await interaction.edit_original_response(
+        content=f"✧ +{reward} {CURRENCY}"
     )
 
-    if card:
-        e.add_field(name="card received", value=card["name"])
-        e.set_image(url=card["image_url"])
-
-    await interaction.followup.send(embed=e)
-
+no
 # =========================
 # 📦 WEEKLY
 # =========================
@@ -561,60 +454,34 @@ async def monthly(interaction: discord.Interaction):
 # =========================
 # 🧬 COLLECTION + FALLEN
 # =========================
-
-@tree.command(name="collection", description="✧ view your collection")
+@tree.command(name="collection", description="✧ view collection")
 async def collection(interaction: discord.Interaction, group: str):
 
-    await interaction.response.defer()
+    await interaction.response.send_message("✧ scanning...")
 
     uid = interaction.user.id
 
-    user = await users.find_one({"id": uid}) or {"cards": {}}
+    user = await users.find_one({"user_id": uid}) or {"cards": {}}
     owned = user.get("cards", {})
 
     all_cards = await cards.find({
         "group": group.lower(),
-        "rarity": {"$nin": ["fallen", "sanctum"]}
+        "rarity": {"$nin": ["fallen","sanctum"]}
     }).to_list(None)
 
-    if not all_cards:
-        return await interaction.followup.send("✧ nothing exists...")
-
     total = len(all_cards)
+    owned_count = sum(1 for c in all_cards if owned.get(c["card_code"],0) > 0)
 
-    owned_list = []
-    missing_list = []
+    percent = int((owned_count/total)*100) if total else 0
 
-    for c in all_cards:
-        if owned.get(c["card_code"], 0) > 0:
-            owned_list.append(c)
-        else:
-            missing_list.append(c)
-
-    owned_count = len(owned_list)
-    percent = int((owned_count / total) * 100)
-
-    e = discord.Embed(
+    embed = discord.Embed(
         title=f"{group.title()} ✧ collection",
         description=f"{owned_count}/{total} • {percent}%",
         color=0x2b2d31
     )
 
-    # aesthetic preview
-    preview = ""
-
-    for c in owned_list[:10]:
-        preview += f"✦ {c['name']} ({c['rarity']})\n"
-
-    if missing_list:
-        preview += "\n✧ missing:\n"
-        for c in missing_list[:5]:
-            preview += f"• {c['name']}\n"
-
-    e.add_field(name="overview", value=preview or "empty")
-
-    await interaction.followup.send(embed=e)
-
+    await interaction.edit_original_response(embed=embed)
+    
     # =====================
     # FALLEN UNLOCK
     # =====================
