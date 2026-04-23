@@ -73,6 +73,45 @@ def cd_left(last, cd):
     return max(0, cd - (now() - last))
 
 # ======================
+# GAME LOGIC (TIC TAC TOE)
+# ======================
+
+def check_win(board, p):
+    wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ]
+    return any(all(board[i]==p for i in w) for w in wins)
+
+
+def bot_move(board):
+    # try to win
+    for i in range(9):
+        if board[i] == "":
+            board[i] = "O"
+            if check_win(board,"O"):
+                return i
+            board[i] = ""
+
+    # block player
+    for i in range(9):
+        if board[i] == "":
+            board[i] = "X"
+            if check_win(board,"X"):
+                board[i] = ""
+                return i
+            board[i] = ""
+
+    # take center
+    if board[4] == "":
+        return 4
+
+    # random move
+    empty = [i for i,v in enumerate(board) if v==""]
+    return random.choice(empty)
+
+# ======================
 # FAST MERGE
 # ======================
 
@@ -264,80 +303,108 @@ async def drop(interaction: discord.Interaction):
 # INVENTORY (FAST)
 # ======================
 @tree.command(name="inventory", description="✧ view collection")
-async def inventory(interaction: discord.Interaction, user: discord.Member=None):
+async def inventory(
+    interaction: discord.Interaction,
+    user: discord.Member=None,
+    name: str=None,
+    group: str=None,
+    rarity: str=None,
+    era: str=None,
+    dupes: bool=False
+):
+    await interaction.response.defer()
 
     target = user or interaction.user
 
-    await interaction.response.send_message("✧ gathering...")
-
     data = await users.find_one({"user_id": target.id}) or {"cards": {}}
-    cards_map = data.get("cards", {})
+    user_cards = data.get("cards", {})
 
-    valid = {k:v for k,v in cards_map.items() if v > 0}
-
+    valid = {k:v for k,v in user_cards.items() if v > 0}
     if not valid:
-        return await interaction.edit_original_response(content="✧ empty...")
+        return await interaction.followup.send("✧ nothing here yet...")
 
-    found = await cards.find({
-        "card_code": {"$in": list(valid.keys())}
-    }).to_list(None)
+    query = {"card_code": {"$in": list(valid.keys())}}
+
+    if name:
+        query["name"] = {"$regex": name, "$options": "i"}
+    if group:
+        query["group"] = {"$regex": group, "$options": "i"}
+    if rarity:
+        query["rarity"] = rarity.lower()
+    if era:
+        query["era"] = {"$regex": era, "$options": "i"}
+
+    cards_data = await cards.find(query).to_list(None)
 
     lines = []
-
-    for c in found:
+    for c in cards_data:
         count = valid.get(c["card_code"], 0)
+        if count <= 0:
+            continue
+
+        if dupes:
+            count -= 1
+            if count <= 0:
+                continue
+
         lines.append(
-            f"✧ **{c['group']}** ⟡ {c['name']}\n"
-            f"〔{c['rarity']}〕 • `{c['card_code']}` • {count} copies"
+            f"✦ **{c['group']}** ⟡ {c['name']}\n"
+            f"〔{c['rarity']}〕 • `{c['card_code']}` • {count}"
         )
 
-    lines.sort()
+    if not lines:
+        return await interaction.followup.send("✧ nothing matches...")
+
+    lines.sort(key=lambda x: x.lower())
+    pages = [lines[i:i+5] for i in range(0, len(lines), 5)]
+
+    class InvView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
+            self.page = 0
+
+        async def update(self, interaction):
+            embed = discord.Embed(
+                description="\n\n".join(pages[self.page]),
+                color=0x2b2d31
+            )
+            embed.set_author(
+                name=f"{target.name}'s archive ✧",
+                icon_url=target.display_avatar.url
+            )
+            embed.set_footer(
+                text=f"{self.page+1}/{len(pages)} • total: {len(lines)} cards"
+            )
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        @discord.ui.button(label="◀")
+        async def prev(self, interaction, button):
+            if interaction.user.id != target.id:
+                return await interaction.response.send_message("✧ not yours", ephemeral=True)
+            if self.page > 0:
+                self.page -= 1
+            await self.update(interaction)
+
+        @discord.ui.button(label="▶")
+        async def next(self, interaction, button):
+            if interaction.user.id != target.id:
+                return await interaction.response.send_message("✧ not yours", ephemeral=True)
+            if self.page < len(pages)-1:
+                self.page += 1
+            await self.update(interaction)
 
     embed = discord.Embed(
-        description="\n\n".join(lines[:10]),
+        description="\n\n".join(pages[0]),
         color=0x2b2d31
     )
     embed.set_author(
         name=f"{target.name}'s archive ✧",
         icon_url=target.display_avatar.url
     )
+    embed.set_footer(text=f"1/{len(pages)} • total: {len(lines)} cards")
 
-    await interaction.edit_original_response(content=None, embed=embed)
-    
-# ======================
-# VIEW
-# ======================
-@tree.command(name="view", description="✧ reveal a card")
-async def view(interaction: discord.Interaction, card_code: str):
+    await interaction.followup.send(embed=embed, view=InvView())
 
-    await interaction.response.send_message("✧ revealing...")
-
-    code = card_code.lower()
-
-    card = await cards.find_one({"card_code": code})
-    if not card:
-        return await interaction.edit_original_response(content="✧ invalid card")
-
-    data = await users.find_one({"user_id": interaction.user.id}) or {"cards": {}}
-    copies = data.get("cards", {}).get(code, 0)
-
-    embed = discord.Embed(
-        title="✧ card archive",
-        description=(
-            f"**name** ⟡ {card['name']}\n"
-            f"**group** ⟡ {card['group']}\n"
-            f"**rarity** ⟡ {card['rarity']}\n"
-            f"**era** ⟡ {card.get('era') or '—'}"
-        ),
-        color=0x2b2d31
-    )
-
-    embed.set_image(url=card["image_url"])
-
-    await interaction.edit_original_response(
-        content=f"✧ you own {copies} copies",
-        embed=embed
-    )
 # =========================
 # ⏳ TIME FORMAT
 # =========================
@@ -456,10 +523,9 @@ async def monthly(interaction: discord.Interaction):
 @tree.command(name="collection", description="✧ view collection")
 async def collection(interaction: discord.Interaction, group: str):
 
-    await interaction.response.send_message("✧ scanning...")
+    await interaction.response.defer()
 
     uid = interaction.user.id
-
     user = await users.find_one({"user_id": uid}) or {"cards": {}}
     owned = user.get("cards", {})
 
@@ -468,18 +534,52 @@ async def collection(interaction: discord.Interaction, group: str):
         "rarity": {"$nin": ["fallen","sanctum"]}
     }).to_list(None)
 
-    total = len(all_cards)
-    owned_count = sum(1 for c in all_cards if owned.get(c["card_code"],0) > 0)
+    if not all_cards:
+        return await interaction.followup.send("✧ nothing exists...")
 
-    percent = int((owned_count/total)*100) if total else 0
+    lines = []
+
+    for c in all_cards:
+        owned_flag = "✓" if owned.get(c["card_code"],0) > 0 else "✧"
+        lines.append(
+            f"{owned_flag} {c['name']} • {c['rarity']}"
+        )
+
+    pages = [lines[i:i+8] for i in range(0, len(lines), 8)]
+
+    class ColView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
+            self.page = 0
+
+        async def update(self, interaction):
+            embed = discord.Embed(
+                title=f"{group.title()} ✧ collection",
+                description="\n".join(pages[self.page]),
+                color=0x2b2d31
+            )
+            embed.set_footer(text=f"{self.page+1}/{len(pages)}")
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        @discord.ui.button(label="◀")
+        async def prev(self, interaction, button):
+            if self.page > 0:
+                self.page -= 1
+            await self.update(interaction)
+
+        @discord.ui.button(label="▶")
+        async def next(self, interaction, button):
+            if self.page < len(pages)-1:
+                self.page += 1
+            await self.update(interaction)
 
     embed = discord.Embed(
         title=f"{group.title()} ✧ collection",
-        description=f"{owned_count}/{total} • {percent}%",
+        description="\n".join(pages[0]),
         color=0x2b2d31
     )
 
-    await interaction.edit_original_response(embed=embed)
+    await interaction.followup.send(embed=embed, view=ColView())
     
     # =====================
     # FALLEN UNLOCK
@@ -711,8 +811,101 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 
     await interaction.response.send_message(embed=embed)
 
+
+# ======================
+# tictactoe 
+# ======================
+@tree.command(name="tic_tac_toe", description="✧ play fate game")
+async def ttt(interaction: discord.Interaction, user: discord.Member=None):
+
+    await interaction.response.defer()
+
+    opponent = user or bot.user
+    player = interaction.user
+
+    wins = {"player":0, "bot":0}
+
+    async def play_round():
+        board = [""]*9
+
+        class Game(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60)
+
+            async def move(self, interaction, idx):
+                if board[idx] != "":
+                    return await interaction.response.send_message("taken", ephemeral=True)
+
+                board[idx] = "X"
+
+                if check_win(board,"X"):
+                    wins["player"] += 1
+                    return await interaction.response.edit_message(content="you win this round", view=None)
+
+                if "" not in board:
+                    return await interaction.response.edit_message(content="tie", view=None)
+
+                b = bot_move(board)
+                board[b] = "O"
+
+                if check_win(board,"O"):
+                    wins["bot"] += 1
+                    return await interaction.response.edit_message(content="bot wins this round", view=None)
+
+                await interaction.response.edit_message(content=str(board), view=self)
+
+            @discord.ui.button(label="1")
+            async def b1(self,i,b): await self.move(i,0)
+            @discord.ui.button(label="2")
+            async def b2(self,i,b): await self.move(i,1)
+            @discord.ui.button(label="3")
+            async def b3(self,i,b): await self.move(i,2)
+            @discord.ui.button(label="4")
+            async def b4(self,i,b): await self.move(i,3)
+            @discord.ui.button(label="5")
+            async def b5(self,i,b): await self.move(i,4)
+            @discord.ui.button(label="6")
+            async def b6(self,i,b): await self.move(i,5)
+            @discord.ui.button(label="7")
+            async def b7(self,i,b): await self.move(i,6)
+            @discord.ui.button(label="8")
+            async def b8(self,i,b): await self.move(i,7)
+            @discord.ui.button(label="9")
+            async def b9(self,i,b): await self.move(i,8)
+
+        await interaction.followup.send("✧ round begins", view=Game())
+
+    # 3 rounds
+    for _ in range(3):
+        await play_round()
+
+    # result
+    if wins["player"] > wins["bot"]:
+        reward = random.randint(1500,3000)
+
+        card = await cards.aggregate([
+            {"$match":{"rarity":{"$in":["enthrall","devotion"]}}},
+            {"$sample":{"size":1}}
+        ]).to_list(1)
+
+        update = {"currency": reward}
+        if card:
+            update[f"cards.{card[0]['card_code']}"] = 1
+
+        await users.update_one(
+            {"user_id": interaction.user.id},
+            {"$inc": update},
+            upsert=True
+        )
+
+        await interaction.followup.send(f"✧ victory\n+{reward} relics + card")
+
+    else:
+        await interaction.followup.send("✧ fate denied")
+
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
+
 # ======================
 # READY
 # ======================
