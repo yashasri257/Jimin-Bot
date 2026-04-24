@@ -122,23 +122,24 @@ async def set_cooldown(uid, key):
 ]
 
 async def draw_board(board, bg_url, player_emoji, bot_emoji):
-async def draw_board(board, bg_url, player_emoji, bot_emoji):
     size = 600
 
-    # ALWAYS create base (no URL fetch)
-    base = Image.new("RGBA",(size,size),(25,25,25))
+    # create base image
+    base = Image.new("RGBA", (size, size), (25, 25, 25))
     draw = ImageDraw.Draw(base)
 
     # draw grid
-    for i in range(1,3):
+    for i in range(1, 3):
         draw.line((0, i*200, 600, i*200), fill=(200,200,200), width=5)
         draw.line((i*200, 0, i*200, 600), fill=(200,200,200), width=5)
 
+    # font
     try:
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 120)
     except:
         font = ImageFont.load_default()
 
+    # draw moves
     for i, val in enumerate(board):
         if val == "":
             continue
@@ -147,13 +148,13 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
         y = (i // 3) * 200 + 50
 
         emoji = player_emoji if val == "P" else bot_emoji
-        draw.text((x, y), emoji, font=font)
+        draw.text((x, y), emoji, font=font, fill=(255,255,255))
 
     buf = BytesIO()
     base.save(buf, "PNG")
     buf.seek(0)
     return buf
-        
+
 # ======================
 # GET CARD (FAST + SAFE)
 # ======================
