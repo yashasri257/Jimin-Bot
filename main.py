@@ -137,13 +137,21 @@ async def set_cooldown(uid, key):
 async def draw_board(board, bg_url, player_emoji, bot_emoji):
     size = 600
 
+    base = None
+
     if bg_url:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(bg_url) as r:
-                data = await r.read()
-                base = Image.open(BytesIO(data)).convert("RGBA").resize((size, size))
-    else:
-        base = Image.new("RGBA", (size, size), (25,25,25))
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(bg_url) as r:
+                    if r.status == 200:
+                        data = await r.read()
+                        base = Image.open(BytesIO(data)).convert("RGBA").resize((size,size))
+        except:
+            base = None
+
+    # fallback if image fails
+    if base is None:
+        base = Image.new("RGBA",(size,size),(25,25,25))
 
     draw = ImageDraw.Draw(base)
 
