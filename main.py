@@ -944,8 +944,7 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 @bot.tree.command(name="tic-tac-toe", description="✧ play game")
 async def tic_tac_toe(interaction: discord.Interaction):
 
-    await interaction.response.defer()
-
+    await interaction.response.send_message("✧ starting game...")
     uid = interaction.user.id
 
     user_data = await users.find_one({"id": uid}) or {}
@@ -1033,8 +1032,13 @@ async def tic_tac_toe(interaction: discord.Interaction):
         embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
         embed.set_image(url="attachment://board.png")
 
-        await interaction.followup.send(embed=embed, file=file, view=view)
-
+        await interaction.edit_original_response(
+    content=None,
+    embed=embed,
+    attachments=[file],
+    view=view
+        )
+        
         while True:
             await asyncio.sleep(1)
             if all(i.disabled for i in view.children):
