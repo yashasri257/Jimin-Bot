@@ -913,11 +913,10 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 
     await interaction.response.send_message(embed=embed)
 
-
 # ======================
 # tic-tac-toe 
 # ======================
- @bot.tree.command(name="tic-tac-toe")
+@bot.tree.command(name="tic-tac-toe")
 async def tic_tac_toe(interaction: discord.Interaction):
 
     uid = interaction.user.id
