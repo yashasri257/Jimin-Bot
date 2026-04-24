@@ -122,24 +122,17 @@ async def set_cooldown(uid, key):
 ]
 
 async def draw_board(board, bg_url, player_emoji, bot_emoji):
+async def draw_board(board, bg_url, player_emoji, bot_emoji):
     size = 600
 
-    base = None
-
-    if bg_url:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(bg_url) as r:
-                    if r.status == 200:
-                        data = await r.read()
-                        base = Image.open(BytesIO(data)).convert("RGBA").resize((size,size))
-        except:
-            base = None
-
-    if base is None:
-        base = Image.new("RGBA",(size,size),(25,25,25))
-
+    # ALWAYS create base (no URL fetch)
+    base = Image.new("RGBA",(size,size),(25,25,25))
     draw = ImageDraw.Draw(base)
+
+    # draw grid
+    for i in range(1,3):
+        draw.line((0, i*200, 600, i*200), fill=(200,200,200), width=5)
+        draw.line((i*200, 0, i*200, 600), fill=(200,200,200), width=5)
 
     try:
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 120)
@@ -150,47 +143,16 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
         if val == "":
             continue
 
-        x, y = CELL_POS[i]
+        x = (i % 3) * 200 + 70
+        y = (i // 3) * 200 + 50
+
         emoji = player_emoji if val == "P" else bot_emoji
-        draw.text((x-40, y-60), emoji, font=font)
+        draw.text((x, y), emoji, font=font)
 
     buf = BytesIO()
     base.save(buf, "PNG")
     buf.seek(0)
     return buf
-
-
-def check_win(b, p):
-    wins = [
-        [0,1,2],[3,4,5],[6,7,8],
-        [0,3,6],[1,4,7],[2,5,8],
-        [0,4,8],[2,4,6]
-    ]
-    return any(all(b[i]==p for i in w) for w in wins)
-
-
-def bot_move(board):
-    # WIN
-    for i in range(9):
-        if board[i] == "":
-            board[i] = "B"
-            if check_win(board,"B"):
-                return
-            board[i] = ""
-
-    # BLOCK
-    for i in range(9):
-        if board[i] == "":
-            board[i] = "P"
-            if check_win(board,"P"):
-                board[i] = "B"
-                return
-            board[i] = ""
-
-    # RANDOM
-    empty = [i for i,v in enumerate(board) if v==""]
-    if empty:
-        board[random.choice(empty)] = "B"
         
 # ======================
 # GET CARD (FAST + SAFE)
@@ -957,6 +919,8 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
     total_wins = 0
 
+    theme = BOARD_THEMES["default"]
+    
     async def play_round(r):
         nonlocal total_wins
 
