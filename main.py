@@ -907,6 +907,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
     uid = interaction.user.id
 
+    # cooldown
     if uid in ttt_cooldowns and ttt_cooldowns[uid] > time.time():
         left = int(ttt_cooldowns[uid] - time.time())
         return await interaction.followup.send(f"✧ wait {left//60}m {left%60}s")
@@ -957,71 +958,97 @@ async def tic_tac_toe(interaction: discord.Interaction):
         board = [""]*9
 
         class GameView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=60)
+            def __init__(self):
+                super().__init__(timeout=60)
 
-        for i in range(9):
-            btn = discord.ui.Button(label="⬜", row=i//3)
-            btn.callback = self.make_callback(i)
-            self.add_item(btn)
+                for i in range(9):
+                    btn = discord.ui.Button(emoji="⬜", row=i//3)
+                    btn.callback = self.make_callback(i)
+                    self.add_item(btn)
 
-    def disable_all(self):
-        for item in self.children:
-            item.disabled = True
+            def disable_all(self):
+                for item in self.children:
+                    item.disabled = True
 
-    def make_callback(self, idx):
-        async def callback(interaction: discord.Interaction):
-            nonlocal total_wins
+            def make_callback(self, idx):
+                async def callback(interaction: discord.Interaction):
+                    nonlocal total_wins
 
-            # ✅ ALWAYS respond first
-            await interaction.response.defer()
+                    # prevent interaction fail
+                    await interaction.response.defer()
 
-            if interaction.user.id != uid:
-                await interaction.followup.send("✧ not yours", ephemeral=True)
-                return
+                    if interaction.user.id != uid:
+                        await interaction.followup.send("✧ not yours", ephemeral=True)
+                        return
 
-            if board[idx] != "":
-                return
+                    if board[idx] != "":
+                        return
 
-            # PLAYER MOVE
-            board[idx] = "P"
-            self.children[idx].label = player_emoji
+                    # player move
+                    board[idx] = "P"
+                    self.children[idx].emoji = player_emoji
 
-            # PLAYER WIN
-            if check_win(board, "P"):
-                self.disable_all()
-                total_wins += 1
+                    # player win
+                    if check_win(board, "P"):
+                        self.disable_all()
+                        total_wins += 1
 
-                await interaction.edit_original_response(view=self)
-                await interaction.followup.send(f"✧ round {r} win")
-                return
+                        await interaction.edit_original_response(view=self)
+                        await interaction.followup.send(f"✧ round {r} win")
+                        return
 
-            # BOT MOVE
-            if "" in board:
-                m = bot_move(board)
-                board[m] = "B"
-                self.children[m].label = bot_emoji
+                    # bot move
+                    if "" in board:
+                        m = bot_move(board)
+                        board[m] = "B"
+                        self.children[m].emoji = bot_emoji
 
-            # BOT WIN
-            if check_win(board, "B"):
-                self.disable_all()
+                    # bot win
+                    if check_win(board, "B"):
+                        self.disable_all()
 
-                await interaction.edit_original_response(view=self)
-                await interaction.followup.send(f"✧ round {r} lost")
-                return
+                        await interaction.edit_original_response(view=self)
+                        await interaction.followup.send(f"✧ round {r} lost")
+                        return
 
-            # DRAW
-            if "" not in board:
-                self.disable_all()
+                    # draw
+                    if "" not in board:
+                        self.disable_all()
 
-                await interaction.edit_original_response(view=self)
-                await interaction.followup.send(f"✧ round {r} draw")
-                return
+                        await interaction.edit_original_response(view=self)
+                        await interaction.followup.send(f"✧ round {r} draw")
+                        return
 
-            # UPDATE BOARD
-            await interaction.edit_original_response(view=self)
+                    # update board
+                    await interaction.edit_original_response(view=self)
 
-        return callback
+                return callback
+
+        view = GameView()
+        await interaction.followup.send(f"✧ round {r}", view=view)
+
+        # wait till round ends
+        while True:
+            await asyncio.sleep(1)
+            if all(i.disabled for i in view.children):
+                break
+
+    # 3 rounds
+    for r in range(1, 4):
+        await play_round(r)
+        await asyncio.sleep(2)
+
+    # perfect bonus
+    if total_wins == 3:
+        bonus = 10000
+
+        await users.update_one(
+            {"id": uid},
+            {"$inc": {"currency": bonus}},
+            upsert=True
+        )
+
+        await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")
         
 # ======================
 # USE theme 
