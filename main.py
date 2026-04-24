@@ -907,7 +907,6 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
     uid = interaction.user.id
 
-    # cooldown
     if uid in ttt_cooldowns and ttt_cooldowns[uid] > time.time():
         left = int(ttt_cooldowns[uid] - time.time())
         return await interaction.followup.send(f"✧ wait {left//60}m {left%60}s")
@@ -915,49 +914,10 @@ async def tic_tac_toe(interaction: discord.Interaction):
     user_data = await users.find_one({"id": uid}) or {}
     theme = BOARD_THEMES.get(user_data.get("active_theme", "default"))
 
-    bg_url = theme["bg"]
-    player_emoji = theme["player"]
-    bot_emoji = theme["bot"]
+    player_emoji = theme.get("player", "❌")
+    bot_emoji = theme.get("bot", "⭕")
 
     total_wins = 0
-
-    async def draw_board(board):
-        size = 600
-
-        if bg_url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(bg_url) as r:
-                    data = await r.read()
-                    base = Image.open(BytesIO(data)).convert("RGBA").resize((size, size))
-        else:
-            base = Image.new("RGBA", (size, size), (25,25,25))
-
-        draw = ImageDraw.Draw(base)
-
-        # grid
-        line = (180,180,180,200)
-        draw.line((200,50,200,550), fill=line, width=5)
-        draw.line((400,50,400,550), fill=line, width=5)
-        draw.line((50,200,550,200), fill=line, width=5)
-        draw.line((50,400,550,400), fill=line, width=5)
-
-        try:
-            font = ImageFont.truetype("DejaVuSans-Bold.ttf", 140)
-        except:
-            font = ImageFont.load_default()
-
-        for i, val in enumerate(board):
-            if val == "":
-                continue
-
-            x, y = CELL_POS[i]
-            emoji = player_emoji if val == "P" else bot_emoji
-            draw.text((x-50, y-70), emoji, font=font)
-
-        buf = BytesIO()
-        base.save(buf, "PNG")
-        buf.seek(0)
-        return buf
 
     def check_win(b, p):
         wins = [
@@ -1004,7 +964,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
             class Btn(discord.ui.Button):
                 def __init__(self, idx):
-                    super().__init__(label=" ", row=idx//3)
+                    super().__init__(label="⬜", row=idx//3)
                     self.idx = idx
 
                 async def callback(self, interaction: discord.Interaction):
@@ -1017,68 +977,45 @@ async def tic_tac_toe(interaction: discord.Interaction):
                         return await interaction.response.defer()
 
                     board[self.idx] = "P"
-                    self.disabled = True
+                    self.label = player_emoji
 
+                    # win
                     if check_win(board, "P"):
                         self.view.disable_all()
                         total_wins += 1
-                        await end_round(interaction, True)
+                        await interaction.response.edit_message(view=self.view)
+                        await interaction.followup.send(f"✧ round {r} win")
                         return
 
-                    if "" not in board:
-                        self.view.disable_all()
-                        await end_round(interaction, None)
-                        return
+                    # bot move
+                    if "" in board:
+                        m = bot_move(board)
+                        board[m] = "B"
+                        self.view.children[m].label = bot_emoji
 
-                    m = bot_move(board)
-                    board[m] = "B"
-                    self.view.children[m].disabled = True
-
+                    # bot win
                     if check_win(board, "B"):
                         self.view.disable_all()
-                        await end_round(interaction, False)
+                        await interaction.response.edit_message(view=self.view)
+                        await interaction.followup.send(f"✧ round {r} lost")
                         return
 
+                    # draw
                     if "" not in board:
                         self.view.disable_all()
-                        await end_round(interaction, None)
+                        await interaction.response.edit_message(view=self.view)
+                        await interaction.followup.send(f"✧ round {r} draw")
                         return
 
-                    img = await draw_board(board)
-                    file = discord.File(img, "board.png")
-
-                    embed = discord.Embed(color=0x2b2d31)
-                    embed.set_image(url="attachment://board.png")
-
-                    await interaction.message.edit(
-                        embed=embed,
-                        attachments=[file],
-                        view=self.view
-                    )
+                    await interaction.response.edit_message(view=self.view)
 
             def disable_all(self):
                 for i in self.children:
                     i.disabled = True
 
-        async def end_round(interaction, win):
-            if win:
-                reward = random.randint(2000,4000)
-                await users.update_one({"id": uid},{"$inc":{"currency":reward}},upsert=True)
-                await interaction.followup.send(f"✧ round {r} win +{reward}")
-            elif win is False:
-                await interaction.followup.send(f"✧ round {r} lost")
-            else:
-                await interaction.followup.send(f"✧ round {r} draw")
-
         view = GameView()
 
-        img = await draw_board(board)
-        file = discord.File(img, "board.png")
-
-        embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
-        embed.set_image(url="attachment://board.png")
-
-        await interaction.followup.send(embed=embed, file=file, view=view)
+        await interaction.followup.send(f"✧ round {r}", view=view)
 
         while True:
             await asyncio.sleep(1)
@@ -1092,72 +1029,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
     if total_wins == 3:
         bonus = 10000
         await users.update_one({"id": uid},{"$inc":{"currency":bonus}})
-        await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")                
-
-
-# ======================
-# THEMES 
-# =====================
-@tree.command(name="themes", description="✧ view themes shop")
-async def themes(interaction: discord.Interaction):
-
-    embed = discord.Embed(
-        title="✧ theme shop",
-        description="buy aesthetic boards ✧ 5000 relics",
-        color=0x2b2d31
-    )
-
-    for name, data in BOARD_THEMES.items():
-        if name == "default":
-            continue
-        embed.add_field(
-            name=name.upper(),
-            value=f"{data['price']} relics",
-            inline=False
-        )
-
-    class ThemeView(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=60)
-
-            for name in BOARD_THEMES:
-                if name == "default":
-                    continue
-                self.add_item(self.BuyBtn(name))
-
-        class BuyBtn(discord.ui.Button):
-            def __init__(self, theme_name):
-                super().__init__(label=f"buy {theme_name}", style=discord.ButtonStyle.secondary)
-                self.theme_name = theme_name
-
-            async def callback(self, interaction: discord.Interaction):
-
-                uid = interaction.user.id
-                user = await users.find_one({"id": uid}) or {}
-
-                owned = user.get("themes", [])
-
-                if self.theme_name in owned:
-                    return await interaction.response.send_message("✧ already owned", ephemeral=True)
-
-                price = BOARD_THEMES[self.theme_name]["price"]
-                coins = user.get("currency", 0)
-
-                if coins < price:
-                    return await interaction.response.send_message("✧ not enough relics", ephemeral=True)
-
-                await users.update_one(
-                    {"id": uid},
-                    {
-                        "$inc": {"currency": -price},
-                        "$push": {"themes": self.theme_name}
-                    },
-                    upsert=True
-                )
-
-                await interaction.response.send_message(f"✧ purchased {self.theme_name}")
-
-    await interaction.response.send_message(embed=embed, view=ThemeView())
+        await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")                        
 
 # ======================
 # USE theme 
