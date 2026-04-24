@@ -43,6 +43,34 @@ MONTHLY_CD = 2592000
 RARITIES = ["whisper","cherub","siren","enthrall","devotion","eclipse","velour","fallen","sanctum"]
 
 # ======================
+# 🎮 TIC TAC TOE CONFIG
+# ======================
+
+TTT_CD = 1800
+ttt_cooldowns = {}
+
+BOARD_THEMES = {
+    "default": {
+        "bg": None,
+        "player": "❌",
+        "bot": "⭕",
+        "price": 0
+    },
+    "bts": {
+        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496872097140441118/Untitled31_20260423192118.png",
+        "player": "💜",
+        "bot": "🖤",
+        "price": 5000
+    },
+    "aespa": {
+        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496873888460705912/Untitled31_20260423192447.png",
+        "player": "💗",
+        "bot": "🖤",
+        "price": 5000
+    }
+}
+
+# ======================
 # BOT SETUP
 # ======================
 
@@ -87,7 +115,83 @@ async def set_cooldown(uid, key):
         upsert=True
     )
 
-    
+    CELL_POS = [
+    (100,100),(300,100),(500,100),
+    (100,300),(300,300),(500,300),
+    (100,500),(300,500),(500,500)
+]
+
+async def draw_board(board, bg_url, player_emoji, bot_emoji):
+    size = 600
+
+    base = None
+
+    if bg_url:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(bg_url) as r:
+                    if r.status == 200:
+                        data = await r.read()
+                        base = Image.open(BytesIO(data)).convert("RGBA").resize((size,size))
+        except:
+            base = None
+
+    if base is None:
+        base = Image.new("RGBA",(size,size),(25,25,25))
+
+    draw = ImageDraw.Draw(base)
+
+    try:
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 120)
+    except:
+        font = ImageFont.load_default()
+
+    for i, val in enumerate(board):
+        if val == "":
+            continue
+
+        x, y = CELL_POS[i]
+        emoji = player_emoji if val == "P" else bot_emoji
+        draw.text((x-40, y-60), emoji, font=font)
+
+    buf = BytesIO()
+    base.save(buf, "PNG")
+    buf.seek(0)
+    return buf
+
+
+def check_win(b, p):
+    wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ]
+    return any(all(b[i]==p for i in w) for w in wins)
+
+
+def bot_move(board):
+    # WIN
+    for i in range(9):
+        if board[i] == "":
+            board[i] = "B"
+            if check_win(board,"B"):
+                return
+            board[i] = ""
+
+    # BLOCK
+    for i in range(9):
+        if board[i] == "":
+            board[i] = "P"
+            if check_win(board,"P"):
+                board[i] = "B"
+                return
+            board[i] = ""
+
+    # RANDOM
+    empty = [i for i,v in enumerate(board) if v==""]
+    if empty:
+        board[random.choice(empty)] = "B"
+        
 # ======================
 # GET CARD (FAST + SAFE)
 # ======================
@@ -744,6 +848,10 @@ async def revoke(
     await interaction.followup.send("✧ revoked successfully")
     await log(bot, log_text)
 
+
+# ======================
+# favourite 
+# ======================
 @bot.tree.command(name="favourite", description="✧ set your favourites")
 async def favourite(
     interaction: discord.Interaction,
@@ -784,6 +892,10 @@ async def favourite(
 
     await interaction.response.send_message("✧ favourites updated")
 
+
+# ======================
+# profile
+# ======================
 @bot.tree.command(name="profile", description="✧ view your profile")
 async def profile(interaction: discord.Interaction, user: discord.User = None):
 
@@ -826,6 +938,202 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
     await interaction.response.send_message(embed=embed)
 
 
+# ======================
+# tic-tac-toe 
+# ======================
+@bot.tree.command(name="tic-tac-toe", description="✧ play game")
+async def tic_tac_toe(interaction: discord.Interaction):
+
+    await interaction.response.defer()
+
+    uid = interaction.user.id
+
+    user_data = await users.find_one({"id": uid}) or {}
+    theme_name = user_data.get("active_theme","default")
+    theme = BOARD_THEMES.get(theme_name, BOARD_THEMES["default"])
+
+    bg_url = theme["bg"]
+    player_emoji = theme["player"]
+    bot_emoji = theme["bot"]
+
+    total_wins = 0
+
+    async def play_round(r):
+        nonlocal total_wins
+
+        board = [""]*9
+
+        class GameView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60)
+
+                for i in range(9):
+                    self.add_item(self.Btn(i))
+
+            class Btn(discord.ui.Button):
+                def __init__(self, index):
+                    super().__init__(style=discord.ButtonStyle.secondary)
+                    self.index = index
+
+                async def callback(self, interaction: discord.Interaction):
+
+                    if interaction.user.id != uid:
+                        return await interaction.response.send_message("✧ not your game", ephemeral=True)
+
+                    if board[self.index] != "":
+                        return await interaction.response.defer()
+
+                    board[self.index] = "P"
+                    bot_move(board)
+
+                    result = None
+                    if check_win(board,"P"):
+                        result = "win"
+                    elif check_win(board,"B"):
+                        result = "lose"
+                    elif "" not in board:
+                        result = "draw"
+
+                    img = await draw_board(board, bg_url, player_emoji, bot_emoji)
+                    file = discord.File(img,"board.png")
+
+                    embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
+                    embed.set_image(url="attachment://board.png")
+
+                    if result:
+                        self.view.disable_all()
+
+                    await interaction.response.edit_message(
+                        embed=embed,
+                        attachments=[file],
+                        view=self.view
+                    )
+
+                    if result == "win":
+                        total_wins += 1
+                        reward = random.randint(2000,4000)
+                        await users.update_one({"id":uid},{"$inc":{"currency":reward}},upsert=True)
+                        await interaction.followup.send(f"✧ round {r} win +{reward}")
+
+                    elif result == "lose":
+                        await interaction.followup.send(f"✧ round {r} lost")
+
+                    elif result == "draw":
+                        await interaction.followup.send(f"✧ round {r} draw")
+
+            def disable_all(self):
+                for i in self.children:
+                    i.disabled = True
+
+        view = GameView()
+
+        img = await draw_board(board, bg_url, player_emoji, bot_emoji)
+        file = discord.File(img,"board.png")
+
+        embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
+        embed.set_image(url="attachment://board.png")
+
+        await interaction.followup.send(embed=embed, file=file, view=view)
+
+        while True:
+            await asyncio.sleep(1)
+            if all(i.disabled for i in view.children):
+                break
+
+    for r in range(1,4):
+        await play_round(r)
+        await asyncio.sleep(2)
+
+    if total_wins == 3:
+        bonus = 10000
+        await users.update_one({"id":uid},{"$inc":{"currency":bonus}})
+        await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")
+
+# ======================
+# theme shop
+# ======================
+@bot.tree.command(name="theme shop", description="✧ buy themes")
+async def theme_shop(interaction: discord.Interaction):
+
+    class ShopView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
+
+            for name, data in BOARD_THEMES.items():
+                if name == "default":
+                    continue
+                self.add_item(self.BuyBtn(name))
+
+        class BuyBtn(discord.ui.Button):
+            def __init__(self, theme_name):
+                super().__init__(label=f"buy {theme_name}", style=discord.ButtonStyle.primary)
+                self.theme_name = theme_name
+
+            async def callback(self, interaction: discord.Interaction):
+
+                uid = interaction.user.id
+                user = await users.find_one({"id":uid}) or {}
+
+                owned = user.get("themes", [])
+                if self.theme_name in owned:
+                    return await interaction.response.send_message("✧ already owned", ephemeral=True)
+
+                cost = BOARD_THEMES[self.theme_name]["price"]
+                bal = user.get("currency",0)
+
+                if bal < cost:
+                    return await interaction.response.send_message("✧ not enough relics", ephemeral=True)
+
+                await users.update_one(
+                    {"id":uid},
+                    {
+                        "$inc":{"currency":-cost},
+                        "$push":{"themes":self.theme_name}
+                    },
+                    upsert=True
+                )
+
+                await interaction.response.send_message(f"✧ bought {self.theme_name}")
+
+    embed = discord.Embed(title="✧ theme shop", color=0x2b2d31)
+
+    for name,data in BOARD_THEMES.items():
+        if name == "default":
+            continue
+        embed.add_field(
+            name=name,
+            value=f"{data['price']} relics",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed, view=ShopView())
+
+
+# ======================
+# use theme 
+# ======================
+@bot.tree.command(name="theme use", description="✧ equip theme")
+async def use_theme(interaction: discord.Interaction, theme: str):
+
+    uid = interaction.user.id
+    user = await users.find_one({"id":uid}) or {}
+
+    owned = user.get("themes", [])
+
+    if theme != "default" and theme not in owned:
+        return await interaction.response.send_message("✧ you don't own this")
+
+    if theme not in BOARD_THEMES:
+        return await interaction.response.send_message("✧ invalid theme")
+
+    await users.update_one(
+        {"id":uid},
+        {"$set":{"active_theme":theme}},
+        upsert=True
+    )
+
+    await interaction.response.send_message(f"✧ equipped {theme}")
+    
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
