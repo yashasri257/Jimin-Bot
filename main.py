@@ -63,15 +63,15 @@ BOARD_THEMES = {
         "price": 0
     },
     "bts": {
-        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496872097140441118/Untitled31_20260423192118.png?ex=69eb7646&is=69ea24c6&hm=519b015bf468bf834fd598b60c1619286fd01295a9a8bf587f6979f5487ba237&",
-        "player": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931002553995384/Untitled32_20260423214109.png?ex=69ebad22&is=69ea5ba2&hm=11d6e7ec6bebd53c1d15ebacecfea3938f8f70409f73ddee87173292789800da&",
-        "bot": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931052176937021/Untitled32_20260423214239.png?ex=69ebad2e&is=69ea5bae&hm=5b29ec5246671cc0d860e347003cc7514e93eaae3c8fb99b92fae5edff83ec91&",
+        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496873888460705912/Untitled31_20260423192447.png",
+        "player": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931002553995384/Untitled32_20260423214109.png",
+        "bot": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931052176937021/Untitled32_20260423214239.png",
         "price": 5000
     },
     "aespa": {
-        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496873888460705912/Untitled31_20260423192447.png?ex=69eb77f1&is=69ea2671&hm=5244c8aca82acf5907cdde466cb14833eaff15c76d2d3df271b6c69b07b98b2c&",
-        "player": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931037551394916/Untitled32_20260423214229.png?ex=69ebad2a&is=69ea5baa&hm=9912dc9ebfe71c01981e645cf03ad7076775d1ee71251e11b95551e0070f4e6a&",
-        "bot": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931052176937021/Untitled32_20260423214239.png?ex=69ebad2e&is=69ea5bae&hm=5b29ec5246671cc0d860e347003cc7514e93eaae3c8fb99b92fae5edff83ec91&",
+        "bg": "https://cdn.discordapp.com/attachments/1487054242244984957/1496873888460705912/Untitled31_20260423192447.png",
+        "player": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931037551394916/Untitled32_20260423214229.png",
+        "bot": "https://cdn.discordapp.com/attachments/1487054242244984957/1496931052176937021/Untitled32_20260423214239.png",
         "price": 5000
     }
 }
