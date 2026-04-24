@@ -1027,7 +1027,7 @@ if not theme:
     if BG:
         embed.set_image(url=BG)
 
-    await interaction.response.send_message(embed=embed, view=self)
+    await interaction.response.edit_message(embed=embed, view=self)
     
 # ======================
 # theme shop
