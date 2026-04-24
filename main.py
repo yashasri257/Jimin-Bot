@@ -122,13 +122,36 @@ async def set_cooldown(uid, key):
         upsert=True
     )
     
-# ======================
-# 🎮 TIC TAC TOE HELPERS
-# ======================
+# ================= THEMES =================
+BOARD_THEMES = {
+    "default": {
+        "bg": None,
+        "player": "❌",
+        "bot": "⭕"
+    },
+    "bts": {
+        "bg": "PASTE_YOUR_BTS_IMAGE_LINK",
+        "player": "💜",
+        "bot": "🖤"
+    },
+    "aespa": {
+        "bg": "PASTE_YOUR_AESPA_IMAGE_LINK",
+        "player": "💗",
+        "bot": "🖤"
+    }
+}
+
+# ================= BOARD POSITIONS =================
+CELL_POS = [
+    (100,100),(300,100),(500,100),
+    (100,300),(300,300),(500,300),
+    (100,500),(300,500),(500,500)
+]
+
+# ================= DRAW BOARD =================
 async def draw_board(board, bg_url, player_emoji, bot_emoji):
     size = 600
 
-    # background
     if bg_url:
         async with aiohttp.ClientSession() as session:
             async with session.get(bg_url) as r:
@@ -140,7 +163,7 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
     draw = ImageDraw.Draw(base)
 
     try:
-        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 140)
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 120)
     except:
         font = ImageFont.load_default()
 
@@ -150,15 +173,46 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
 
         x, y = CELL_POS[i]
         emoji = player_emoji if val == "P" else bot_emoji
-
-        draw.text((x-50, y-70), emoji, font=font)
+        draw.text((x-40, y-60), emoji, font=font)
 
     buf = BytesIO()
     base.save(buf, "PNG")
     buf.seek(0)
     return buf
 
+# ================= GAME LOGIC =================
+def check_win(b, p):
+    wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ]
+    return any(all(b[i]==p for i in w) for w in wins)
 
+def bot_move(board):
+    # WIN
+    for i in range(9):
+        if board[i]=="":
+            board[i]="B"
+            if check_win(board,"B"):
+                return
+            board[i]=""
+
+    # BLOCK
+    for i in range(9):
+        if board[i]=="":
+            board[i]="P"
+            if check_win(board,"P"):
+                board[i]="B"
+                return
+            board[i]=""
+
+    # RANDOM
+    empty=[i for i,v in enumerate(board) if v==""]
+    if empty:
+        board[random.choice(empty)]="B"
+
+    
 # ======================
 # GET CARD (FAST + SAFE)
 # ======================
@@ -900,155 +954,106 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # ======================
 # tictactoe 
 # ======================
-@tree.command(name="tic_tac_toe", description="✧ play a fate game")
+@bot.tree.command(name="tic_tac_toe")
 async def tic_tac_toe(interaction: discord.Interaction):
 
     await interaction.response.send_message("✧ starting game...")
 
-    uid = interaction.user.id
-
-    # cooldown
-    if uid in ttt_cooldowns and ttt_cooldowns[uid] > time.time():
-        left = int(ttt_cooldowns[uid] - time.time())
-        return await interaction.followup.send(f"✧ wait {left//60}m {left%60}s")
-
-    user_data = await users.find_one({"id": uid}) or {}
-    theme = BOARD_THEMES.get(user_data.get("active_theme", "default"))
-
-    player_emoji = theme.get("player", "❌")
-    bot_emoji = theme.get("bot", "⭕")
-
     total_wins = 0
 
-    def check_win(b, p):
-        wins = [
-            [0,1,2],[3,4,5],[6,7,8],
-            [0,3,6],[1,4,7],[2,5,8],
-            [0,4,8],[2,4,6]
-        ]
-        return any(all(b[i]==p for i in w) for w in wins)
-
-    def bot_move(b):
-        for i in range(9):
-            if b[i]=="":
-                b[i]="B"
-                if check_win(b,"B"):
-                    b[i]=""
-                    return i
-                b[i]=""
-        for i in range(9):
-            if b[i]=="":
-                b[i]="P"
-                if check_win(b,"P"):
-                    b[i]=""
-                    return i
-                b[i]=""
-        for i in [0,2,6,8]:
-            if b[i]=="":
-                return i
-        if b[4]=="":
-            return 4
-        for i in [1,3,5,7]:
-            if b[i]=="":
-                return i
+    theme = BOARD_THEMES["bts"]  # later you can make this dynamic
+    bg_url = theme["bg"]
+    player_emoji = theme["player"]
+    bot_emoji = theme["bot"]
 
     async def play_round(r):
         nonlocal total_wins
 
-        board = [""]*9
+        board = [""] * 9
 
         class GameView(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60)
 
                 for i in range(9):
-                    btn = discord.ui.Button(emoji="⬜", row=i//3)
-                    btn.callback = self.make_callback(i)
-                    self.add_item(btn)
+                    self.add_item(self.Btn(i))
+
+            class Btn(discord.ui.Button):
+                def __init__(self, index):
+                    super().__init__(style=discord.ButtonStyle.secondary)
+                    self.index = index
+
+                async def callback(self, interaction: discord.Interaction):
+
+                    if board[self.index] != "":
+                        await interaction.response.defer()
+                        return
+
+                    # PLAYER MOVE
+                    board[self.index] = "P"
+
+                    # BOT MOVE
+                    bot_move(board)
+
+                    # CHECK RESULT
+                    if check_win(board,"P"):
+                        self.view.disable_all()
+                        await interaction.response.edit_message(view=self.view)
+                        total_wins += 1
+                        await interaction.followup.send(f"✧ round {r} win")
+                        return
+
+                    if check_win(board,"B"):
+                        self.view.disable_all()
+                        await interaction.response.edit_message(view=self.view)
+                        await interaction.followup.send(f"✧ round {r} lost")
+                        return
+
+                    if "" not in board:
+                        self.view.disable_all()
+                        await interaction.response.edit_message(view=self.view)
+                        await interaction.followup.send(f"✧ round {r} draw")
+                        return
+
+                    # UPDATE IMAGE
+                    img = await draw_board(board, bg_url, player_emoji, bot_emoji)
+                    file = discord.File(img, "board.png")
+
+                    embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
+                    embed.set_image(url="attachment://board.png")
+
+                    await interaction.response.edit_message(
+                        embed=embed,
+                        attachments=[file],
+                        view=self.view
+                    )
 
             def disable_all(self):
                 for item in self.children:
                     item.disabled = True
 
-            def make_callback(self, idx):
-                async def callback(interaction: discord.Interaction):
-                    nonlocal total_wins
-
-                    # prevent interaction fail
-                    await interaction.response.defer()
-
-                    if interaction.user.id != uid:
-                        await interaction.followup.send("✧ not yours", ephemeral=True)
-                        return
-
-                    if board[idx] != "":
-                        return
-
-                    # player move
-                    board[idx] = "P"
-                    self.children[idx].emoji = player_emoji
-
-                    # player win
-                    if check_win(board, "P"):
-                        self.disable_all()
-                        total_wins += 1
-
-                        await interaction.edit_original_response(view=self)
-                        await interaction.followup.send(f"✧ round {r} win")
-                        return
-
-                    # bot move
-                    if "" in board:
-                        m = bot_move(board)
-                        board[m] = "B"
-                        self.children[m].emoji = bot_emoji
-
-                    # bot win
-                    if check_win(board, "B"):
-                        self.disable_all()
-
-                        await interaction.edit_original_response(view=self)
-                        await interaction.followup.send(f"✧ round {r} lost")
-                        return
-
-                    # draw
-                    if "" not in board:
-                        self.disable_all()
-
-                        await interaction.edit_original_response(view=self)
-                        await interaction.followup.send(f"✧ round {r} draw")
-                        return
-
-                    # update board
-                    await interaction.edit_original_response(view=self)
-
-                return callback
-
         view = GameView()
-        await interaction.followup.send(f"✧ round {r}", view=view)
 
-        # wait till round ends
+        img = await draw_board(board, bg_url, player_emoji, bot_emoji)
+        file = discord.File(img, "board.png")
+
+        embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
+        embed.set_image(url="attachment://board.png")
+
+        await interaction.followup.send(embed=embed, file=file, view=view)
+
         while True:
             await asyncio.sleep(1)
             if all(i.disabled for i in view.children):
                 break
 
-    # 3 rounds
-    for r in range(1, 4):
+    # 3 ROUNDS
+    for r in range(1,4):
         await play_round(r)
         await asyncio.sleep(2)
 
-    # perfect bonus
     if total_wins == 3:
-        bonus = 10000
-
-        await users.update_one(
-            {"id": uid},
-            {"$inc": {"currency": bonus}},
-            upsert=True
-        )
-
-        await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")
+        await interaction.followup.send("✧ PERFECT GAME +10000")
         
 # ======================
 # USE theme 
