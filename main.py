@@ -917,18 +917,21 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # ======================
 # tic-tac-toe 
 # ======================
-@bot.tree.command(name="tic-tac-toe", description="✧ play game")
+@bot.tree.command(name="tic-tac-toe")
 async def tic_tac_toe(interaction: discord.Interaction):
 
+    await interaction.response.defer()
     uid = interaction.user.id
     user = await users.find_one({"id": uid}) or {}
 
-    theme = await db["themes"].find_one({"name": user.get("active_theme", "default")})
+    theme = await db["themes"].find_one({"name": user.get("active_theme","default")})
 
-    P = theme.get("player", "❌")
-    B = theme.get("bot", "⭕")
-    BG = theme.get("bg")
-
+if not theme:
+    theme = {
+        "player": "❌",
+        "bot": "⭕",
+        "bg": None
+    }
     board = [""] * 9
 
     def render():
@@ -994,7 +997,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
                 await interaction.response.edit_message(
                     embed=embed,
-                    view=View()
+                    view=self()
                 )
 
                 if result == "win":
@@ -1024,7 +1027,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
     if BG:
         embed.set_image(url=BG)
 
-    await interaction.response.send_message(embed=embed, view=View())
+    await interaction.response.send_message(embed=embed, view=self())
     
 # ======================
 # theme shop
