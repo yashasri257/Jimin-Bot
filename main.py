@@ -138,7 +138,20 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 120)
     except:
         font = ImageFont.load_default()
+def check_win(b, p):
+    win = [
+        (0,1,2),(3,4,5),(6,7,8),
+        (0,3,6),(1,4,7),(2,5,8),
+        (0,4,8),(2,4,6)
+    ]
+    return any(all(b[i] == p for i in line) for line in win)
 
+
+def bot_move(board, bot_symbol):
+    empty = [i for i, v in enumerate(board) if v == ""]
+    if empty:
+        board[random.choice(empty)] = bot_symbol
+        
     # draw moves
     for i, val in enumerate(board):
         if val == "":
@@ -904,36 +917,31 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # ======================
 # tic-tac-toe 
 # ======================
-def check_win(b, p):
-    win = [
-        (0,1,2),(3,4,5),(6,7,8),
-        (0,3,6),(1,4,7),(2,5,8),
-        (0,4,8),(2,4,6)
-    ]
-    return any(all(b[i]==p for i in line) for line in win)
-
-
-def bot_move(board):
-    empty = [i for i,v in enumerate(board) if v == ""]
-    if not empty:
-        return
-    board[random.choice(empty)] = "B"
-
-
 @bot.tree.command(name="tic-tac-toe", description="✧ play game")
 async def tic_tac_toe(interaction: discord.Interaction):
 
     uid = interaction.user.id
-    await interaction.response.send_message("✧ starting game...")
+    user = await users.find_one({"id": uid}) or {}
 
-    user_data = await users.find_one({"id": uid}) or {}
-    theme_name = user_data.get("active_theme", "default")
-    theme = BOARD_THEMES.get(theme_name, BOARD_THEMES["default"])
+    theme = await db["themes"].find_one({"name": user.get("active_theme", "default")})
+
+    P = theme.get("player", "❌")
+    B = theme.get("bot", "⭕")
+    BG = theme.get("bg")
 
     board = [""] * 9
-    total_wins = 0
 
-    class GameView(discord.ui.View):
+    def render():
+        def c(i):
+            return board[i] if board[i] else "⬛"
+
+        return (
+            f"{c(0)} {c(1)} {c(2)}\n"
+            f"{c(3)} {c(4)} {c(5)}\n"
+            f"{c(6)} {c(7)} {c(8)}"
+        )
+
+    class View(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=120)
 
@@ -941,10 +949,14 @@ async def tic_tac_toe(interaction: discord.Interaction):
                 self.add_item(self.make_button(i))
 
         def make_button(self, i):
-            button = discord.ui.Button(label="⬜", style=discord.ButtonStyle.secondary)
+
+            btn = discord.ui.Button(
+                label=board[i] if board[i] else "⬛",
+                style=discord.ButtonStyle.secondary,
+                row=i // 3
+            )
 
             async def callback(interaction: discord.Interaction):
-                nonlocal board, total_wins
 
                 if interaction.user.id != uid:
                     return await interaction.response.send_message("✧ not your game", ephemeral=True)
@@ -952,36 +964,38 @@ async def tic_tac_toe(interaction: discord.Interaction):
                 if board[i] != "":
                     return await interaction.response.defer()
 
-                board[i] = "P"
+                # PLAYER MOVE
+                board[i] = P
 
-                if check_win(board, "P"):
-                    total_wins += 1
-                    self.disable_all()
+                # CHECK WIN
+                if check_win(board, P):
                     result = "win"
+                    self.disable_all()
                 else:
-                    bot_move(board)
-                    if check_win(board, "B"):
-                        self.disable_all()
+                    bot_move(board, B)
+
+                    if check_win(board, B):
                         result = "lose"
-                    elif "" not in board:
                         self.disable_all()
+                    elif "" not in board:
                         result = "draw"
+                        self.disable_all()
                     else:
                         result = None
 
-                img = await draw_board(
-                    board,
-                    theme["bg"],
-                    theme["player"],
-                    theme["bot"]
+                embed = discord.Embed(
+                    title="✧ tic tac toe",
+                    description=render(),
+                    color=0x2b2d31
                 )
 
-                file = discord.File(img, "board.png")
+                if BG:
+                    embed.set_image(url=BG)
 
-                embed = discord.Embed(title="✧ tic tac toe", color=0x2b2d31)
-                embed.set_image(url="attachment://board.png")
-
-                await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+                await interaction.response.edit_message(
+                    embed=embed,
+                    view=View()
+                )
 
                 if result == "win":
                     reward = random.randint(2000, 4000)
@@ -994,28 +1008,24 @@ async def tic_tac_toe(interaction: discord.Interaction):
                 elif result == "draw":
                     await interaction.followup.send("✧ draw")
 
-            button.callback = callback
-            return button
+            btn.callback = callback
+            return btn
 
         def disable_all(self):
-            for item in self.children:
-                item.disabled = True
+            for b in self.children:
+                b.disabled = True
 
-    view = GameView()
-
-    img = await draw_board(
-        board,
-        theme["bg"],
-        theme["player"],
-        theme["bot"]
+    embed = discord.Embed(
+        title="✧ tic tac toe",
+        description=render(),
+        color=0x2b2d31
     )
 
-    file = discord.File(img, "board.png")
+    if BG:
+        embed.set_image(url=BG)
 
-    embed = discord.Embed(title="✧ tic tac toe", color=0x2b2d31)
-    embed.set_image(url="attachment://board.png")
-
-    await interaction.edit_original_response(embed=embed, attachments=[file], view=view)
+    await interaction.response.send_message(embed=embed, view=View())
+    
 # ======================
 # theme shop
 # ======================
