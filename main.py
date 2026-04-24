@@ -921,28 +921,41 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 async def tic_tac_toe(interaction: discord.Interaction):
 
     await interaction.response.defer()
+
     uid = interaction.user.id
     user = await users.find_one({"id": uid}) or {}
 
     theme = await db["themes"].find_one({"name": user.get("active_theme","default")})
 
-if not theme:
-    theme = {
-        "player": "❌",
-        "bot": "⭕",
-        "bg": None
-    }
+    if not theme:
+        theme = {
+            "player": "❌",
+            "bot": "⭕",
+            "bg": None
+        }
+
+    P = theme["player"]
+    B = theme["bot"]
+    BG = theme["bg"]
+
     board = [""] * 9
 
-    def render():
-        def c(i):
-            return board[i] if board[i] else "⬛"
+    def check_win(b, p):
+        win = [
+            (0,1,2),(3,4,5),(6,7,8),
+            (0,3,6),(1,4,7),(2,5,8),
+            (0,4,8),(2,4,6)
+        ]
+        return any(all(b[i] == p for i in line) for line in win)
 
-        return (
-            f"{c(0)} {c(1)} {c(2)}\n"
-            f"{c(3)} {c(4)} {c(5)}\n"
-            f"{c(6)} {c(7)} {c(8)}"
-        )
+    def bot_move():
+        empty = [i for i,v in enumerate(board) if v == ""]
+        if empty:
+            board[random.choice(empty)] = B
+
+    def render():
+        def c(i): return board[i] or "⬛"
+        return f"{c(0)} {c(1)} {c(2)}\n{c(3)} {c(4)} {c(5)}\n{c(6)} {c(7)} {c(8)}"
 
     class View(discord.ui.View):
         def __init__(self):
@@ -967,15 +980,13 @@ if not theme:
                 if board[i] != "":
                     return await interaction.response.defer()
 
-                # PLAYER MOVE
                 board[i] = P
 
-                # CHECK WIN
                 if check_win(board, P):
                     result = "win"
                     self.disable_all()
                 else:
-                    bot_move(board, B)
+                    bot_move()
 
                     if check_win(board, B):
                         result = "lose"
@@ -995,10 +1006,7 @@ if not theme:
                 if BG:
                     embed.set_image(url=BG)
 
-                await interaction.response.edit_message(
-                    embed=embed,
-                    view=self
-                )
+                await interaction.response.edit_message(embed=embed, view=self)
 
                 if result == "win":
                     reward = random.randint(2000, 4000)
@@ -1027,8 +1035,8 @@ if not theme:
     if BG:
         embed.set_image(url=BG)
 
-    await interaction.response.edit_message(embed=embed, view=self.view)
-    
+    await interaction.edit_original_response(embed=embed, view=View())
+            
 # ======================
 # theme shop
 # ======================
