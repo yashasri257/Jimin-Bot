@@ -904,120 +904,118 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # ======================
 # tic-tac-toe 
 # ======================
+def check_win(b, p):
+    win = [
+        (0,1,2),(3,4,5),(6,7,8),
+        (0,3,6),(1,4,7),(2,5,8),
+        (0,4,8),(2,4,6)
+    ]
+    return any(all(b[i]==p for i in line) for line in win)
+
+
+def bot_move(board):
+    empty = [i for i,v in enumerate(board) if v == ""]
+    if not empty:
+        return
+    board[random.choice(empty)] = "B"
+
+
 @bot.tree.command(name="tic-tac-toe", description="✧ play game")
 async def tic_tac_toe(interaction: discord.Interaction):
 
-    await interaction.response.send_message("✧ starting game...")
     uid = interaction.user.id
+    await interaction.response.send_message("✧ starting game...")
 
     user_data = await users.find_one({"id": uid}) or {}
-    theme_name = user_data.get("active_theme","default")
+    theme_name = user_data.get("active_theme", "default")
     theme = BOARD_THEMES.get(theme_name, BOARD_THEMES["default"])
 
-    bg_url = theme["bg"]
-    player_emoji = theme["player"]
-    bot_emoji = theme["bot"]
-
+    board = [""] * 9
     total_wins = 0
 
-    theme = BOARD_THEMES["default"]
-    
-    async def play_round(r):
-        nonlocal total_wins
+    class GameView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
 
-        board = [""]*9
+            for i in range(9):
+                self.add_item(self.make_button(i))
 
-        class GameView(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=60)
+        def make_button(self, i):
+            button = discord.ui.Button(label="⬜", style=discord.ButtonStyle.secondary)
 
-                for i in range(9):
-                    self.add_item(self.Btn(i))
+            async def callback(interaction: discord.Interaction):
+                nonlocal board, total_wins
 
-            class Btn(discord.ui.Button):
-                def __init__(self, index):
-                    super().__init__(style=discord.ButtonStyle.secondary)
-                    self.index = index
+                if interaction.user.id != uid:
+                    return await interaction.response.send_message("✧ not your game", ephemeral=True)
 
-                async def callback(self, interaction: discord.Interaction):
+                if board[i] != "":
+                    return await interaction.response.defer()
 
-                    if interaction.user.id != uid:
-                        return await interaction.response.send_message("✧ not your game", ephemeral=True)
+                board[i] = "P"
 
-                    if board[self.index] != "":
-                        return await interaction.response.defer()
-
-                    board[self.index] = "P"
+                if check_win(board, "P"):
+                    total_wins += 1
+                    self.disable_all()
+                    result = "win"
+                else:
                     bot_move(board)
-
-                    result = None
-                    if check_win(board,"P"):
-                        result = "win"
-                    elif check_win(board,"B"):
+                    if check_win(board, "B"):
+                        self.disable_all()
                         result = "lose"
                     elif "" not in board:
+                        self.disable_all()
                         result = "draw"
+                    else:
+                        result = None
 
-                    img = await draw_board(board, bg_url, player_emoji, bot_emoji)
-                    file = discord.File(img,"board.png")
+                img = await draw_board(
+                    board,
+                    theme["bg"],
+                    theme["player"],
+                    theme["bot"]
+                )
 
-                    embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
-                    embed.set_image(url="attachment://board.png")
+                file = discord.File(img, "board.png")
 
-                    if result:
-                        self.view.disable_all()
+                embed = discord.Embed(title="✧ tic tac toe", color=0x2b2d31)
+                embed.set_image(url="attachment://board.png")
 
-                    await interaction.response.edit_message(
-                        embed=embed,
-                        attachments=[file],
-                        view=self.view
-                    )
+                await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
 
-                    if result == "win":
-                        total_wins += 1
-                        reward = random.randint(2000,4000)
-                        await users.update_one({"id":uid},{"$inc":{"currency":reward}},upsert=True)
-                        await interaction.followup.send(f"✧ round {r} win +{reward}")
+                if result == "win":
+                    reward = random.randint(2000, 4000)
+                    await users.update_one({"id": uid}, {"$inc": {"currency": reward}}, upsert=True)
+                    await interaction.followup.send(f"✧ win +{reward}")
 
-                    elif result == "lose":
-                        await interaction.followup.send(f"✧ round {r} lost")
+                elif result == "lose":
+                    await interaction.followup.send("✧ you lost")
 
-                    elif result == "draw":
-                        await interaction.followup.send(f"✧ round {r} draw")
+                elif result == "draw":
+                    await interaction.followup.send("✧ draw")
 
-            def disable_all(self):
-                for i in self.children:
-                    i.disabled = True
+            button.callback = callback
+            return button
 
-        view = GameView()
+        def disable_all(self):
+            for item in self.children:
+                item.disabled = True
 
-        img = await draw_board(board, bg_url, player_emoji, bot_emoji)
-        file = discord.File(img,"board.png")
+    view = GameView()
 
-        embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
-        embed.set_image(url="attachment://board.png")
+    img = await draw_board(
+        board,
+        theme["bg"],
+        theme["player"],
+        theme["bot"]
+    )
 
-        await interaction.edit_original_response(
-    content=None,
-    embed=embed,
-    attachments=[file],
-    view=view
-        )
-        
-        while True:
-            await asyncio.sleep(1)
-            if all(i.disabled for i in view.children):
-                break
+    file = discord.File(img, "board.png")
 
-    for r in range(1,4):
-        await play_round(r)
-        await asyncio.sleep(2)
+    embed = discord.Embed(title="✧ tic tac toe", color=0x2b2d31)
+    embed.set_image(url="attachment://board.png")
 
-    if total_wins == 3:
-        bonus = 10000
-        await users.update_one({"id":uid},{"$inc":{"currency":bonus}})
-        await interaction.followup.send(f"✧ PERFECT GAME +{bonus}")
-
+    await interaction.edit_original_response(embed=embed, attachments=[file], view=view)
 # ======================
 # theme shop
 # ======================
