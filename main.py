@@ -127,9 +127,10 @@ async def set_cooldown(uid, key):
         {"$set": {f"{key}_cd": now()}},
         upsert=True
     )
-    
-# ================= THEMES =================
 
+
+# ================= THEMES =================
+theme = BOARD_THEMES["default"]
 
 
 
@@ -137,8 +138,8 @@ async def set_cooldown(uid, key):
 async def draw_board(board, bg_url, player_emoji, bot_emoji):
     size = 600
 
+    # SAFE BACKGROUND LOAD
     base = None
-
     if bg_url:
         try:
             async with aiohttp.ClientSession() as session:
@@ -149,7 +150,6 @@ async def draw_board(board, bg_url, player_emoji, bot_emoji):
         except:
             base = None
 
-    # fallback if image fails
     if base is None:
         base = Image.new("RGBA",(size,size),(25,25,25))
 
@@ -976,41 +976,56 @@ async def tic_tac_toe(interaction: discord.Interaction):
 
                 async def callback(self, interaction: discord.Interaction):
 
-                    if board[self.index] != "":
-                        await interaction.response.defer()
-                        return
+    # only game owner
+    if interaction.user.id != uid:
+        return await interaction.response.send_message("✧ not your game", ephemeral=True)
 
-                    board[self.index] = "P"
-                    bot_move(board)
+    if board[self.index] != "":
+        return await interaction.response.defer()
 
-                    img = await draw_board(board, bg_url, player_emoji, bot_emoji)
-                    file = discord.File(img, "board.png")
+    # PLAYER MOVE
+    board[self.index] = "P"
 
-                    embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
-                    embed.set_image(url="attachment://board.png")
+    # BOT MOVE
+    bot_move(board)
 
-                    # RESULT CHECK
-                    if check_win(board,"P"):
-                        self.view.disable_all()
-                        total_wins += 1
-                        await interaction.response.edit_message(embed=embed, attachments=[file], view=self.view)
-                        await interaction.followup.send(f"✧ round {r} win")
-                        return
+    # CHECK RESULT
+    result = None
+    if check_win(board, "P"):
+        result = "win"
+    elif check_win(board, "B"):
+        result = "lose"
+    elif "" not in board:
+        result = "draw"
 
-                    if check_win(board,"B"):
-                        self.view.disable_all()
-                        await interaction.response.edit_message(embed=embed, attachments=[file], view=self.view)
-                        await interaction.followup.send(f"✧ round {r} lost")
-                        return
+    if result == "win":
+        total_wins += 1
 
-                    if "" not in board:
-                        self.view.disable_all()
-                        await interaction.response.edit_message(embed=embed, attachments=[file], view=self.view)
-                        await interaction.followup.send(f"✧ round {r} draw")
-                        return
+    # DRAW BOARD (ALWAYS SAFE NOW)
+    img = await draw_board(board, bg_url, player_emoji, bot_emoji)
+    file = discord.File(img, "board.png")
 
-                    await interaction.response.edit_message(embed=embed, attachments=[file], view=self.view)
+    embed = discord.Embed(title=f"✧ round {r}", color=0x2b2d31)
+    embed.set_image(url="attachment://board.png")
 
+    if result:
+        self.view.disable_all()
+
+    # 🔥 SINGLE RESPONSE (CRITICAL)
+    await interaction.response.edit_message(
+        embed=embed,
+        attachments=[file],
+        view=self.view
+    )
+
+    # RESULT MESSAGE
+    if result == "win":
+        await interaction.followup.send(f"✧ round {r} win")
+    elif result == "lose":
+        await interaction.followup.send(f"✧ round {r} lost")
+    elif result == "draw":
+        await interaction.followup.send(f"✧ round {r} draw")
+                    
             def disable_all(self):
                 for i in self.children:
                     i.disabled = True
