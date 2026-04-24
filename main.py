@@ -1008,7 +1008,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
                         return
 
                     await interaction.response.edit_message(view=self.view)
-
+                    
             def disable_all(self):
                 for i in self.children:
                     i.disabled = True
