@@ -543,6 +543,65 @@ async def monthly(interaction: discord.Interaction):
         f"✧ monthly fate\n+{reward} {CURRENCY}\n+{len(cards_won)} cards"
     )
 
+
+# =========================
+#  VIEW
+# =========================
+@tree.command(name="view", description="✧ view a card by code")
+async def view(interaction: discord.Interaction, card_code: str):
+
+    await interaction.response.defer()
+
+    uid = interaction.user.id
+    code = card_code.lower()
+
+    # get card
+    card = await cards.find_one({"card_code": code})
+    if not card:
+        return await interaction.followup.send("✧ card not found")
+
+    # merge old + new schema
+    d1 = await users.find_one({"id": uid}) or {}
+    d2 = await users.find_one({"user_id": uid}) or {}
+
+    owned = d1.get("cards", {}).get(code, 0) + d2.get("cards", {}).get(code, 0)
+
+    # total copies in bot
+    pipeline = [
+        {"$project": {"count": f"$cards.{code}"}},
+        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$count", 0]}}}}
+    ]
+
+    res = await users.aggregate(pipeline).to_list(1)
+    total = res[0]["total"] if res else 0
+
+    # message
+    await interaction.followup.send(
+        f"✧ {interaction.user.mention} owns **{owned}** copies of this card"
+    )
+
+    # aesthetic embed
+    e = discord.Embed(
+        title=f"{card['name']} ✧",
+        description=f"{card['group']} • {card['rarity']}",
+        color=0x2b2d31
+    )
+
+    e.set_author(
+        name=f"{interaction.user.name}'s archive",
+        icon_url=interaction.user.display_avatar.url
+    )
+
+    e.add_field(name="✦ code", value=f"`{code}`", inline=True)
+    e.add_field(name="✦ era", value=card.get("era", "—"), inline=True)
+    e.add_field(name="✦ owned", value=str(owned), inline=True)
+
+    e.set_image(url=card["image_url"])
+
+    e.set_footer(text=f"{total} copies exist across the bot ✧")
+
+    await interaction.followup.send(embed=e)
+    
 # =========================
 # 🧬 COLLECTION + FALLEN
 # =========================
