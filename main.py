@@ -1052,7 +1052,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
 # ======================
 # theme shop
 # ======================
-@bot.tree.command(name="theme shop", description="✧ buy themes")
+@bot.tree.command(name="theme-shop", description="✧ buy themes")
 async def theme_shop(interaction: discord.Interaction):
 
     class ShopView(discord.ui.View):
@@ -1112,7 +1112,7 @@ async def theme_shop(interaction: discord.Interaction):
 # ======================
 # use theme 
 # ======================
-@bot.tree.command(name="theme use", description="✧ equip theme")
+@bot.tree.command(name="use_theme", description="✧ equip theme")
 async def use_theme(interaction: discord.Interaction, theme: str):
 
     uid = interaction.user.id
