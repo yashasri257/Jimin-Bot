@@ -118,6 +118,36 @@ def draw_board(board):
     img.save(buf, "PNG")
     buf.seek(0)
     return buf
+
+# ======================
+# ⏳ GLOBAL COOLDOWN SYSTEM (PERMANENT)
+# ======================
+
+def now():
+    return int(time.time())
+
+async def get_user(uid):
+    return await users.find_one({"id": uid}) or {}
+
+async def check_cd(uid, key, cd):
+    user = await get_user(uid)
+    last = user.get(f"{key}_cd", 0)
+    return max(0, cd - (now() - last))
+
+async def set_cd(uid, key):
+    await users.update_one(
+        {"id": uid},
+        {"$set": {f"{key}_cd": now()}},
+        upsert=True
+    )
+
+def fmt(sec):
+    if sec <= 0:
+        return "ready ✧"
+    h = sec // 3600
+    m = (sec % 3600) // 60
+    s = sec % 60
+    return f"{h}h {m}m {s}s"
     
 # ======================
 # ADD CARD
@@ -636,6 +666,47 @@ async def collection(interaction: discord.Interaction, group: str):
                 f"🩸 {group.title()} complete — fallen cards awakened..."
             )
 
+
+
+# ======================
+# cooldown
+# ======================          
+@tree.command(name="cooldown", description="✧ view cooldowns")
+async def cooldown(interaction: discord.Interaction, user: discord.Member = None):
+
+    target = user or interaction.user
+    uid = target.id
+
+    await interaction.response.defer()
+
+    drop_cd = await check_cd(uid, "drop", DROP_CD)
+    claim_cd = await check_cd(uid, "claim", CLAIM_CD)
+    daily_cd = await check_cd(uid, "daily", DAILY_CD)
+    weekly_cd = await check_cd(uid, "weekly", WEEKLY_CD)
+    monthly_cd = await check_cd(uid, "monthly", MONTHLY_CD)
+    ttt_cd = await check_cd(uid, "ttt", 1800)
+
+    embed = discord.Embed(
+        title="✧ cooldowns",
+        color=0x2b2d31
+    )
+
+    embed.set_author(
+        name=target.name,
+        icon_url=target.display_avatar.url
+    )
+
+    embed.add_field(name="claim", value=fmt(claim_cd), inline=True)
+    embed.add_field(name="drop", value=fmt(drop_cd), inline=True)
+    embed.add_field(name="daily", value=fmt(daily_cd), inline=True)
+    embed.add_field(name="weekly", value=fmt(weekly_cd), inline=True)
+    embed.add_field(name="monthly", value=fmt(monthly_cd), inline=True)
+    embed.add_field(name="tic-tac-toe", value=fmt(ttt_cd), inline=True)
+
+    embed.set_footer(text="✧ time bends, patience rewards")
+
+    await interaction.followup.send(embed=embed)
+    
 # ======================
 # GRANT
 # ======================
