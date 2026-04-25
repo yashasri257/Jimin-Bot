@@ -1063,7 +1063,87 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
     else:
         await interaction.followup.send("✧ no wins — you can play again immediately")
-        
+
+# ======================
+# reset cooldowns 
+# ======================
+@bot.tree.command(name="reset_cooldown", description="✧ reset cooldowns (staff only)")
+@app_commands.describe(
+    user="user to reset",
+    daily="reset daily cooldown",
+    weekly="reset weekly cooldown",
+    monthly="reset monthly cooldown",
+    tic_tac_toe="reset tic tac toe cooldown"
+)
+async def reset_cooldown(
+    interaction: discord.Interaction,
+    user: discord.Member,
+    daily: bool = False,
+    weekly: bool = False,
+    monthly: bool = False,
+    tic_tac_toe: bool = False
+):
+
+    # ✅ STAFF CHECK
+    if interaction.user.id not in STAFF_IDS:
+        return await interaction.response.send_message("✧ no permission", ephemeral=True)
+
+    await interaction.response.defer()
+
+    updates = {}
+    reset_list = []
+
+    # ======================
+    # SELECTIVE RESET
+    # ======================
+
+    if daily:
+        updates["daily_cd"] = 0
+        reset_list.append("daily")
+
+    if weekly:
+        updates["weekly_cd"] = 0
+        reset_list.append("weekly")
+
+    if monthly:
+        updates["monthly_cd"] = 0
+        reset_list.append("monthly")
+
+    if tic_tac_toe:
+        updates["ttt_cd"] = 0
+        reset_list.append("tic-tac-toe")
+
+    # ======================
+    # IF NOTHING SELECTED → RESET ALL
+    # ======================
+
+    if not updates:
+        updates = {
+            "daily_cd": 0,
+            "weekly_cd": 0,
+            "monthly_cd": 0,
+            "ttt_cd": 0
+        }
+        reset_list = ["daily", "weekly", "monthly", "tic-tac-toe"]
+
+    # ======================
+    # APPLY UPDATE
+    # ======================
+
+    await users.update_one(
+        {"id": user.id},
+        {"$set": updates},
+        upsert=True
+    )
+
+    # ======================
+    # RESPONSE
+    # ======================
+
+    await interaction.followup.send(
+        f"✧ reset {', '.join(reset_list)} cooldown(s) for {user.mention}"
+                 )
+    
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
