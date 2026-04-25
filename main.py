@@ -846,7 +846,7 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # ======================
 # tic-tac-toe 
 # ======================
-@bot.tree.command(name="tic-tac-toe")
+@bot.tree.command(name="tic-tac-toe", description="✧ play tic-tac-toe with Jimin or a user")
 async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
 
     uid = interaction.user.id
