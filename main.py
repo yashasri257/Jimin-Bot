@@ -852,6 +852,16 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
     await interaction.response.defer()
 
     uid = interaction.user.id
+    data = await users.find_one({"id": uid}) or {}
+last_cd = data.get("ttt_cd", 0)
+
+# 30 min cooldown = 1800 seconds
+if time.time() - last_cd < 1800:
+    remaining = int(1800 - (time.time() - last_cd))
+    return await interaction.response.send_message(
+        f"✧ cooldown active:{remaining//60}m {remaining%60:02d}s",
+        ephemeral=True
+    )
     opp_id = opponent.id if opponent else None
 
     P1 = "🌺"
@@ -1024,16 +1034,33 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
         await asyncio.sleep(2)
 
-    # BONUS
-    if total_wins == 3:
-        bonus = 10000
-        await users.update_one(
-            {"id": uid},
-            {"$inc": {"currency": bonus}},
-            upsert=True
-        )
-        await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
-        
+    # ======================
+# FINAL RESULT + COOLDOWN LOGIC
+# ======================
+
+if total_wins > 0:
+    # apply cooldown ONLY if user won at least one round
+    await users.update_one(
+        {"id": uid},
+        {"$set": {"ttt_cd": time.time()}},
+        upsert=True
+    )
+
+if total_wins == 3:
+    bonus = 10000
+    await users.update_one(
+        {"id": uid},
+        {"$inc": {"currency": bonus}},
+        upsert=True
+    )
+    await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
+
+elif total_wins > 0:
+    await interaction.followup.send("✧ game finished — cooldown applied")
+
+else:
+    await interaction.followup.send("✧ no wins — you can play again immediately")
+    
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
