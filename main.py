@@ -859,7 +859,7 @@ last_cd = data.get("ttt_cd", 0)
 if time.time() - last_cd < 1800:
     remaining = int(1800 - (time.time() - last_cd))
     return await interaction.response.send_message(
-        f"✧ cooldown active:{remaining//60}m {remaining%60:02d}s",
+        f"✧ cooldown active: {remaining//60}m {remaining%60}s",
         ephemeral=True
     )
     opp_id = opponent.id if opponent else None
