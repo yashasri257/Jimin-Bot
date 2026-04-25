@@ -186,6 +186,227 @@ async def del_card(interaction:discord.Interaction, card_code:str):
 
     await cards.delete_one({"card_code":card_code})
     await interaction.response.send_message("✧ card deleted")
+    
+# ======================
+# edit card 
+# ======================
+
+@tree.command(name="edit_card", description="✧ edit an existing card (staff)")
+async def edit_card(
+    interaction: discord.Interaction,
+    card_code: str,
+
+    new_name: str = None,
+    new_group: str = None,
+    new_rarity: str = None,
+    new_card_code: str = None,
+    new_image_url: str = None,
+    new_droppable: bool = None,
+    new_rarity_back: str = None,
+    new_era: str = None
+):
+
+    # ======================
+    # PERMISSION CHECK
+    # ======================
+    if not is_staff(interaction.user.id):
+        return await interaction.response.send_message(
+            "✧ no permission", ephemeral=True
+        )
+
+    await interaction.response.defer()
+
+    code = card_code.lower()
+
+    # ======================
+    # FIND CARD
+    # ======================
+    card = await cards.find_one({"card_code": code})
+
+    if not card:
+        return await interaction.followup.send("✧ card not found")
+
+    update = {}
+    log_text = f"✧ {interaction.user} edited {code}\n"
+
+    # ======================
+    # APPLY CHANGES
+    # ======================
+    if new_name:
+        update["name"] = new_name
+        log_text += f"• name → {new_name}\n"
+
+    if new_group:
+        update["group"] = new_group.lower()
+        log_text += f"• group → {new_group}\n"
+
+    if new_rarity:
+        update["rarity"] = new_rarity.lower()
+        log_text += f"• rarity → {new_rarity}\n"
+
+    if new_image_url:
+        update["image_url"] = new_image_url
+        log_text += f"• image updated\n"
+
+    if new_droppable is not None:
+        update["droppable"] = new_droppable
+        log_text += f"• droppable → {new_droppable}\n"
+
+    if new_rarity_back:
+        update["rarity_back"] = new_rarity_back
+        log_text += f"• rarity_back updated\n"
+
+    if new_era:
+        update["era"] = new_era
+        log_text += f"• era → {new_era}\n"
+
+    # ======================
+    # CARD CODE CHANGE (IMPORTANT)
+    # ======================
+    if new_card_code:
+        new_code = new_card_code.lower()
+
+        # check if already exists
+        exists = await cards.find_one({"card_code": new_code})
+        if exists:
+            return await interaction.followup.send("✧ new code already exists")
+
+        update["card_code"] = new_code
+
+        # ALSO UPDATE USER INVENTORIES
+        all_users = users.find({f"cards.{code}": {"$exists": True}})
+
+        async for u in all_users:
+            amount = u.get("cards", {}).get(code, 0)
+            if amount > 0:
+                await users.update_one(
+                    {"id": u["id"]},
+                    {
+                        "$inc": {
+                            f"cards.{code}": -amount,
+                            f"cards.{new_code}": amount
+                        }
+                    }
+                )
+
+        log_text += f"• card_code → {new_code}\n"
+
+    # ======================
+    # APPLY UPDATE
+    # ======================
+    if not update:
+        return await interaction.followup.send("✧ nothing to update")
+
+    await cards.update_one(
+        {"card_code": code},
+        {"$set": update}
+    )
+
+    # ======================
+    # SUCCESS MESSAGE
+    # ======================
+    embed = discord.Embed(
+        title="✧ card updated",
+        description=f"`{code}` edited successfully",
+        color=0x2b2d31
+    )
+
+    await interaction.followup.send(embed=embed)
+
+    # optional logging
+    await log(bot, log_text)
+
+
+# ======================
+# mass edit 
+# ======================
+@tree.command(name="mass_edit", description="✧ mass edit cards (staff)")
+async def mass_edit(
+    interaction: discord.Interaction,
+
+    group: str = None,
+    rarity: str = None,
+    era: str = None,
+
+    set_droppable: bool = None,
+    new_rarity: str = None,
+    new_era: str = None
+):
+
+    # ======================
+    # PERMISSION
+    # ======================
+    if not is_staff(interaction.user.id):
+        return await interaction.response.send_message(
+            "✧ no permission", ephemeral=True
+        )
+
+    await interaction.response.defer()
+
+    # ======================
+    # BUILD FILTER
+    # ======================
+    query = {}
+
+    if group:
+        query["group"] = group.lower()
+
+    if rarity:
+        query["rarity"] = rarity.lower()
+
+    if era:
+        query["era"] = {"$regex": era, "$options": "i"}
+
+    # ======================
+    # CHECK MATCHES
+    # ======================
+    count = await cards.count_documents(query)
+
+    if count == 0:
+        return await interaction.followup.send("✧ no cards matched")
+
+    # ======================
+    # BUILD UPDATE
+    # ======================
+    update = {}
+    log_text = f"✧ {interaction.user} mass edited\n"
+
+    if set_droppable is not None:
+        update["droppable"] = set_droppable
+        log_text += f"• droppable → {set_droppable}\n"
+
+    if new_rarity:
+        update["rarity"] = new_rarity.lower()
+        log_text += f"• rarity → {new_rarity}\n"
+
+    if new_era:
+        update["era"] = new_era
+        log_text += f"• era → {new_era}\n"
+
+    if not update:
+        return await interaction.followup.send("✧ nothing to update")
+
+    # ======================
+    # APPLY MASS UPDATE
+    # ======================
+    await cards.update_many(
+        query,
+        {"$set": update}
+    )
+
+    # ======================
+    # RESPONSE
+    # ======================
+    embed = discord.Embed(
+        title="✧ mass edit complete",
+        description=f"updated **{count}** cards",
+        color=0x2b2d31
+    )
+
+    await interaction.followup.send(embed=embed)
+
+    await log(bot, log_text)
+
 
 # ======================
 # DROP
