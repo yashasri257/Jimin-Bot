@@ -894,32 +894,23 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
     uid = interaction.user.id
     opponent_id = opponent.id if opponent else None
 
-    # cooldown
     data = await users.find_one({"id": uid}) or {}
     last = data.get("ttt_cd", 0)
 
     if time.time() - last < 600:
-        return await interaction.response.send_message(
-            "✧ cooldown active (10 min)",
-            ephemeral=True
-        )
+        return await interaction.response.send_message("✧ cooldown active (10 min)", ephemeral=True)
 
     await interaction.response.defer()
 
-    P1 = "🌸"
-    P2 = "🌿"
+    P1 = "❌"
+    P2 = "⭕"
 
     # ======================
     # SMART BOT
     # ======================
     def bot_move(board):
-        lines = [
-            (0,1,2),(3,4,5),(6,7,8),
-            (0,3,6),(1,4,7),(2,5,8),
-            (0,4,8),(2,4,6)
-        ]
+        lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
 
-        # win
         for a,b,c in lines:
             line = [board[a], board[b], board[c]]
             if line.count(P2) == 2 and line.count("") == 1:
@@ -928,7 +919,6 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
                         board[i] = P2
                         return
 
-        # block
         for a,b,c in lines:
             line = [board[a], board[b], board[c]]
             if line.count(P1) == 2 and line.count("") == 1:
@@ -937,33 +927,17 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
                         board[i] = P2
                         return
 
-        # center
         if board[4] == "":
             board[4] = P2
             return
 
-        # random
         empty = [i for i,v in enumerate(board) if v == ""]
         if empty:
             board[random.choice(empty)] = P2
 
-    # ======================
-    # WIN CHECK
-    # ======================
     def check_win(b, p):
-        wins = [
-            (0,1,2),(3,4,5),(6,7,8),
-            (0,3,6),(1,4,7),(2,5,8),
-            (0,4,8),(2,4,6)
-        ]
-        return any(all(b[i] == p for i in w) for w in wins)
-
-    # ======================
-    # RENDER
-    # ======================
-    def render(board):
-        def c(i): return board[i] or "⬛"
-        return f"{c(0)} {c(1)} {c(2)}\n{c(3)} {c(4)} {c(5)}\n{c(6)} {c(7)} {c(8)}"
+        lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
+        return any(all(b[i] == p for i in line) for line in lines)
 
     round_wins = 0
 
@@ -974,104 +948,115 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
         board = [""] * 9
         result = None
-        turn = uid  # player starts
+        turn = uid
 
         class GameView(discord.ui.View):
             def __init__(self):
-                super().__init__(timeout=90)
+                super().__init__(timeout=60)
+                self.update_buttons()
 
+            def update_buttons(self):
+                self.clear_items()
                 for i in range(9):
-                    self.add_item(self.make_button(i))
+                    label = board[i] if board[i] else " "
+                    style = discord.ButtonStyle.secondary
 
-            def make_button(self, i):
+                    if board[i] == P1:
+                        style = discord.ButtonStyle.danger
+                    elif board[i] == P2:
+                        style = discord.ButtonStyle.success
 
-                btn = discord.ui.Button(
-                    label="⬛",
-                    style=discord.ButtonStyle.secondary,
-                    row=i // 3
-                )
+                    btn = discord.ui.Button(label=label, style=style, row=i//3)
 
-                async def callback(interaction: discord.Interaction):
-                    nonlocal result, turn, round_wins
+                    async def callback(interaction: discord.Interaction, idx=i):
+                        nonlocal result, turn, round_wins
 
-                    if opponent:
-                        if interaction.user.id not in [uid, opponent_id]:
-                            return await interaction.response.send_message("✧ not your game", ephemeral=True)
-                        if interaction.user.id != turn:
-                            return await interaction.response.send_message("✧ not your turn", ephemeral=True)
-                    else:
-                        if interaction.user.id != uid:
-                            return await interaction.response.send_message("✧ not your game", ephemeral=True)
-
-                    if board[i] != "":
-                        return await interaction.response.defer()
-
-                    symbol = P1 if interaction.user.id == uid else P2
-                    board[i] = symbol
-
-                    if check_win(board, symbol):
-                        result = "win" if interaction.user.id == uid else "lose"
-                        self.disable_all()
-
-                    elif "" not in board:
-                        result = "draw"
-                        self.disable_all()
-
-                    else:
                         if opponent:
-                            turn = opponent_id if turn == uid else uid
+                            if interaction.user.id not in [uid, opponent_id]:
+                                return await interaction.response.send_message("✧ not your game", ephemeral=True)
+                            if interaction.user.id != turn:
+                                return await interaction.response.send_message("✧ not your turn", ephemeral=True)
                         else:
-                            bot_move(board)
+                            if interaction.user.id != uid:
+                                return await interaction.response.send_message("✧ not your game", ephemeral=True)
 
-                            if check_win(board, P2):
-                                result = "lose"
-                                self.disable_all()
+                        if board[idx] != "":
+                            return await interaction.response.defer()
 
-                    embed = discord.Embed(
-                        title=f"✧ tic tac toe — round {round_no}",
-                        description=render(board),
-                        color=0x2b2d31
-                    )
+                        symbol = P1 if interaction.user.id == uid else P2
+                        board[idx] = symbol
 
-                    await interaction.response.edit_message(embed=embed, view=self)
+                        if check_win(board, symbol):
+                            result = "win" if interaction.user.id == uid else "lose"
+                            self.disable_all()
 
-                    if result == "win":
-                        reward = random.randint(2000, 4000)
-                        round_wins += 1
+                        elif "" not in board:
+                            result = "draw"
+                            self.disable_all()
 
-                        await users.update_one(
-                            {"id": uid},
-                            {"$inc": {"currency": reward}},
-                            upsert=True
+                        else:
+                            if opponent:
+                                turn = opponent_id if turn == uid else uid
+                            else:
+                                bot_move(board)
+
+                                if check_win(board, P2):
+                                    result = "lose"
+                                    self.disable_all()
+                                elif "" not in board:
+                                    result = "draw"
+                                    self.disable_all()
+
+                        self.update_buttons()
+
+                        embed = discord.Embed(
+                            title=f"✧ TIC TAC TOE ✧ 〔ROUND {round_no}〕",
+                            description="╰┈➤ choose wisely",
+                            color=0x2b2d31
                         )
 
-                        await interaction.followup.send(f"✧ round win +{reward}")
+                        await interaction.response.edit_message(embed=embed, view=self)
 
-                    elif result == "lose":
-                        await interaction.followup.send("✧ round lost")
+                        if result == "win":
+                            reward = random.randint(2000, 4000)
+                            round_wins += 1
 
-                    elif result == "draw":
-                        await interaction.followup.send("✧ draw")
+                            await users.update_one(
+                                {"id": uid},
+                                {"$inc": {"currency": reward}},
+                                upsert=True
+                            )
 
-                btn.callback = callback
-                return btn
+                            await interaction.followup.send(f"✧ round win +{reward}")
+
+                        elif result == "lose":
+                            await interaction.followup.send("✧ round lost")
+
+                        elif result == "draw":
+                            await interaction.followup.send("✧ draw")
+
+                    btn.callback = callback
+                    self.add_item(btn)
 
             def disable_all(self):
-                for b in self.children:
-                    b.disabled = True
+                for item in self.children:
+                    item.disabled = True
 
         view = GameView()
 
         embed = discord.Embed(
-            title=f"✧ tic tac toe — round {round_no}",
-            description=render(board),
+            title=f"✧ TIC TAC TOE ✧ 〔ROUND {round_no}〕",
+            description="╰┈➤ make your move",
             color=0x2b2d31
         )
 
         await interaction.edit_original_response(embed=embed, view=view)
 
-        while any(not b.disabled for b in view.children):
+        # FIXED WAIT LOOP (no infinite draw bug)
+        while result is None:
             await asyncio.sleep(1)
+
+        await asyncio.sleep(2)
 
     # ======================
     # BONUS
@@ -1088,15 +1073,15 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             upsert=True
         )
 
-        await interaction.followup.send(f"👏 PERFECT GAME +{bonus} RELICS")
+        await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
 
     else:
         await users.update_one(
             {"id": uid},
             {"$set": {"ttt_cd": time.time()}},
             upsert=True
-                    )
-                    
+                                )
+        
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
