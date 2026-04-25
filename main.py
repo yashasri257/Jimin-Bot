@@ -849,19 +849,9 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 @bot.tree.command(name="tic-tac-toe")
 async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
 
-    uid = interaction.user.id
-    opp_id = opponent.id if opponent else None
-
-    data = await users.find_one({"id": uid}) or {}
-    last = data.get("ttt_cd", 0)
-
-    if time.time() - last < 600:
-        return await interaction.response.send_message("✧ cooldown active (10 min)", ephemeral=True)
-
-    await interaction.response.send_message("✧ starting game...")
-
-    P1 = "❌"
-    P2 = "⭕"
+    await interaction.response.defer()
+    P1 = "🌺"
+    P2 = "🌹"
 
     def check_win(b, p):
         lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
