@@ -441,24 +441,27 @@ async def daily(interaction: discord.Interaction):
 # =========================
 # 📦 WEEKLY
 # =========================
-
 @tree.command(name="weekly", description="✧ claim weekly relics")
 async def weekly(interaction: discord.Interaction):
 
-    await interaction.response.defer()
-
     uid = interaction.user.id
 
+    # ⛔ cooldown check FIRST (no defer yet)
     left = await check_cd(uid, "weekly", WEEKLY_CD)
     if left > 0:
-        return await interaction.followup.send(
-            f"✧ return later... {format_time(left)}"
+        return await interaction.response.send_message(
+            f"✧ return later... {format_time(left)}",
+            ephemeral=True
         )
+
+    # ✅ defer AFTER passing cooldown
+    await interaction.response.defer()
 
     await set_cooldown(uid, "weekly")
 
     reward = random.randint(1500, 5000)
 
+    # ⚡ faster card fetching
     cards_won = []
     for _ in range(7):
         c = await get_card()
@@ -471,6 +474,7 @@ async def weekly(interaction: discord.Interaction):
 
     await users.update_one({"id": uid}, {"$inc": update}, upsert=True)
 
+    # ✅ ALWAYS RESPOND
     await interaction.followup.send(
         f"✧ weekly fortune\n+{reward} {CURRENCY}\n+{len(cards_won)} cards"
     )
@@ -478,19 +482,20 @@ async def weekly(interaction: discord.Interaction):
 # =========================
 # 🩸 MONTHLY
 # =========================
-
 @tree.command(name="monthly", description="✧ claim monthly fate")
 async def monthly(interaction: discord.Interaction):
 
-    await interaction.response.defer()
-
     uid = interaction.user.id
 
+    # ⛔ cooldown check FIRST
     left = await check_cd(uid, "monthly", MONTHLY_CD)
     if left > 0:
-        return await interaction.followup.send(
-            f"✧ return later... {format_time(left)}"
+        return await interaction.response.send_message(
+            f"✧ return later... {format_time(left)}",
+            ephemeral=True
         )
+
+    await interaction.response.defer()
 
     await set_cooldown(uid, "monthly")
 
@@ -511,8 +516,7 @@ async def monthly(interaction: discord.Interaction):
     await interaction.followup.send(
         f"✧ monthly fate\n+{reward} {CURRENCY}\n+{len(cards_won)} cards"
     )
-
-
+    
 # =========================
 #  VIEW
 # =========================
