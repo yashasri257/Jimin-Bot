@@ -847,165 +847,31 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # tic-tac-toe 
 # ======================
 @bot.tree.command(name="tic-tac-toe")
-async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
+async def tic_tac_toe(interaction: discord.Interaction):
 
     await interaction.response.defer()
-    P1 = "🌺"
-    P2 = "🌹"
 
-    def check_win(b, p):
-        lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
-        return any(all(b[i] == p for i in line) for line in lines)
-
-    def bot_move(board):
-        lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
-
-        for a,b,c in lines:
-            line = [board[a], board[b], board[c]]
-            if line.count(P2) == 2 and line.count("") == 1:
-                for i in (a,b,c):
-                    if board[i] == "":
-                        board[i] = P2
-                        return
-
-        for a,b,c in lines:
-            line = [board[a], board[b], board[c]]
-            if line.count(P1) == 2 and line.count("") == 1:
-                for i in (a,b,c):
-                    if board[i] == "":
-                        board[i] = P2
-                        return
-
-        if board[4] == "":
-            board[4] = P2
-            return
-
-        empty = [i for i,v in enumerate(board) if v == ""]
-        if empty:
-            board[random.choice(empty)] = P2
-
-    total_wins = 0
-
-    for round_no in range(1, 4):
-
+    try:
         board = [""] * 9
-        result = None
-        turn = uid
-
-        class GameView(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=60)
-                self.update_buttons()
-
-            def update_buttons(self):
-                self.clear_items()
-
-                for i in range(9):
-                    label = board[i] if board[i] else " "
-                    btn = discord.ui.Button(label=label, row=i//3)
-
-                    async def callback(interaction: discord.Interaction, idx=i):
-                        nonlocal result, turn, total_wins
-
-                        if opponent:
-                            if interaction.user.id not in [uid, opp_id]:
-                                return await interaction.response.send_message("✧ not your game", ephemeral=True)
-                            if interaction.user.id != turn:
-                                return await interaction.response.send_message("✧ not your turn", ephemeral=True)
-                        else:
-                            if interaction.user.id != uid:
-                                return await interaction.response.send_message("✧ not your game", ephemeral=True)
-
-                        if board[idx] != "":
-                            return await interaction.response.defer()
-
-                        symbol = P1 if interaction.user.id == uid else P2
-                        board[idx] = symbol
-
-                        if check_win(board, symbol):
-                            result = "win" if interaction.user.id == uid else "lose"
-                            self.disable_all()
-
-                        elif "" not in board:
-                            result = "draw"
-                            self.disable_all()
-
-                        else:
-                            if opponent:
-                                turn = opp_id if turn == uid else uid
-                            else:
-                                bot_move(board)
-
-                                if check_win(board, P2):
-                                    result = "lose"
-                                    self.disable_all()
-                                elif "" not in board:
-                                    result = "draw"
-                                    self.disable_all()
-
-                        self.update_buttons()
-
-                        img = draw_board(board)
-                        file = discord.File(img, "board.png")
-
-                        embed = discord.Embed(
-                            title=f"✧ TIC TAC TOE ✧ 〔ROUND {round_no}〕",
-                            color=0x2b2d31
-                        )
-                        embed.set_image(url="attachment://board.png")
-
-                        await interaction.response.edit_message(
-                            embed=embed,
-                            attachments=[file],
-                            view=self
-                        )
-
-                        if result == "win":
-                            reward = random.randint(2000, 4000)
-                            total_wins += 1
-                            await users.update_one({"id": uid}, {"$inc": {"currency": reward}}, upsert=True)
-                            await interaction.followup.send(f"✧ round win +{reward}")
-
-                        elif result == "lose":
-                            await interaction.followup.send("✧ round lost")
-
-                        elif result == "draw":
-                            await interaction.followup.send("✧ draw")
-
-                    btn.callback = callback
-                    self.add_item(btn)
-
-            def disable_all(self):
-                for item in self.children:
-                    item.disabled = True
-
-        view = GameView()
 
         img = draw_board(board)
         file = discord.File(img, "board.png")
 
         embed = discord.Embed(
-            title=f"✧ TIC TAC TOE ✧ 〔ROUND {round_no}〕",
+            title="✧ TIC TAC TOE ✧",
+            description="game started",
             color=0x2b2d31
         )
         embed.set_image(url="attachment://board.png")
 
-        await interaction.edit_original_response(embed=embed, attachments=[file], view=view)
+        await interaction.edit_original_response(
+            embed=embed,
+            attachments=[file]
+        )
 
-        # FIXED WAIT LOOP (no infinite thinking)
-        while result is None:
-            await asyncio.sleep(1)
-
-        await asyncio.sleep(2)
-
-    # BONUS
-    if total_wins == 3:
-        bonus = 10000
-        await users.update_one({"id": uid}, {"$inc": {"currency": bonus}, "$set": {"ttt_cd": time.time()}}, upsert=True)
-        await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
-    else:
-        await users.update_one({"id": uid}, {"$set": {"ttt_cd": time.time()}}, upsert=True)
-
+    except Exception as e:
+        await interaction.followup.send(f"ERROR: {e}")
+        
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
