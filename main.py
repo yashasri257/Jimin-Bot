@@ -1037,33 +1037,33 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
         await asyncio.sleep(2)
 
-    # ======================
+# ======================
 # FINAL RESULT + COOLDOWN LOGIC
 # ======================
 
-if total_wins > 0:
-    # apply cooldown ONLY if user won at least one round
-    await users.update_one(
-        {"id": uid},
-        {"$set": {"ttt_cd": time.time()}},
-        upsert=True
-    )
+    if total_wins > 0:
+        # apply cooldown ONLY if user won at least one round
+        await users.update_one(
+            {"id": uid},
+            {"$set": {"ttt_cd": time.time()}},
+            upsert=True
+        )
 
-if total_wins == 3:
-    bonus = 10000
-    await users.update_one(
-        {"id": uid},
-        {"$inc": {"currency": bonus}},
-        upsert=True
-    )
-    await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
+    if total_wins == 3:
+        bonus = 10000
+        await users.update_one(
+            {"id": uid},
+            {"$inc": {"currency": bonus}},
+            upsert=True
+        )
+        await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
 
-elif total_wins > 0:
-    await interaction.followup.send("✧ game finished — cooldown applied")
+    elif total_wins > 0:
+        await interaction.followup.send("✧ game finished — cooldown applied")
 
-else:
-    await interaction.followup.send("✧ no wins — you can play again immediately")
-    
+    else:
+        await interaction.followup.send("✧ no wins — you can play again immediately")
+        
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
 
