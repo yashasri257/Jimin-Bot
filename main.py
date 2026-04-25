@@ -100,7 +100,6 @@ def draw_board(board):
     img = Image.new("RGBA", (600, 600), (20, 20, 25))
     draw = ImageDraw.Draw(img)
 
-    # grid
     for i in range(1, 3):
         draw.line((0, i*200, 600, i*200), fill=(200,200,200), width=6)
         draw.line((i*200, 0, i*200, 600), fill=(200,200,200), width=6)
@@ -848,116 +847,113 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # tic-tac-toe 
 # ======================
 @bot.tree.command(name="tic-tac-toe")
-async def tic_tac_toe(interaction: discord.Interaction):
+async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
 
     uid = interaction.user.id
+    opp_id = opponent.id if opponent else None
 
-    # ======================
-    # COOLDOWN
-    # ======================
     data = await users.find_one({"id": uid}) or {}
     last = data.get("ttt_cd", 0)
 
     if time.time() - last < 600:
-        return await interaction.response.send_message(
-            "✧ cooldown active (10 min)",
-            ephemeral=True
-        )
+        return await interaction.response.send_message("✧ cooldown active (10 min)", ephemeral=True)
 
-    await interaction.response.defer()
+    await interaction.response.send_message("✧ starting game...")
 
-    P = "❌"
-    B = "⭕"
-
-    # ======================
-    # BOT AI
-    # ======================
-    def bot_move(board):
-        lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
-
-        # win
-        for a,b,c in lines:
-            line = [board[a], board[b], board[c]]
-            if line.count(B) == 2 and line.count("") == 1:
-                for i in (a,b,c):
-                    if board[i] == "":
-                        board[i] = B
-                        return
-
-        # block
-        for a,b,c in lines:
-            line = [board[a], board[b], board[c]]
-            if line.count(P) == 2 and line.count("") == 1:
-                for i in (a,b,c):
-                    if board[i] == "":
-                        board[i] = B
-                        return
-
-        # center
-        if board[4] == "":
-            board[4] = B
-            return
-
-        # random
-        empty = [i for i,v in enumerate(board) if v == ""]
-        if empty:
-            board[random.choice(empty)] = B
+    P1 = "❌"
+    P2 = "⭕"
 
     def check_win(b, p):
         lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
         return any(all(b[i] == p for i in line) for line in lines)
 
-    # ======================
-    # GAME LOOP
-    # ======================
+    def bot_move(board):
+        lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
+
+        for a,b,c in lines:
+            line = [board[a], board[b], board[c]]
+            if line.count(P2) == 2 and line.count("") == 1:
+                for i in (a,b,c):
+                    if board[i] == "":
+                        board[i] = P2
+                        return
+
+        for a,b,c in lines:
+            line = [board[a], board[b], board[c]]
+            if line.count(P1) == 2 and line.count("") == 1:
+                for i in (a,b,c):
+                    if board[i] == "":
+                        board[i] = P2
+                        return
+
+        if board[4] == "":
+            board[4] = P2
+            return
+
+        empty = [i for i,v in enumerate(board) if v == ""]
+        if empty:
+            board[random.choice(empty)] = P2
+
     total_wins = 0
 
     for round_no in range(1, 4):
 
         board = [""] * 9
         result = None
+        turn = uid
 
         class GameView(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60)
-                self.make_buttons()
+                self.update_buttons()
 
-            def make_buttons(self):
+            def update_buttons(self):
                 self.clear_items()
-                for i in range(9):
 
-                    btn = discord.ui.Button(
-                        label=" ",
-                        style=discord.ButtonStyle.secondary,
-                        row=i // 3
-                    )
+                for i in range(9):
+                    label = board[i] if board[i] else " "
+                    btn = discord.ui.Button(label=label, row=i//3)
 
                     async def callback(interaction: discord.Interaction, idx=i):
-                        nonlocal result, total_wins
+                        nonlocal result, turn, total_wins
 
-                        if interaction.user.id != uid:
-                            return await interaction.response.send_message("✧ not your game", ephemeral=True)
+                        if opponent:
+                            if interaction.user.id not in [uid, opp_id]:
+                                return await interaction.response.send_message("✧ not your game", ephemeral=True)
+                            if interaction.user.id != turn:
+                                return await interaction.response.send_message("✧ not your turn", ephemeral=True)
+                        else:
+                            if interaction.user.id != uid:
+                                return await interaction.response.send_message("✧ not your game", ephemeral=True)
 
                         if board[idx] != "":
                             return await interaction.response.defer()
 
-                        # player move
-                        board[idx] = P
+                        symbol = P1 if interaction.user.id == uid else P2
+                        board[idx] = symbol
 
-                        if check_win(board, P):
-                            result = "win"
+                        if check_win(board, symbol):
+                            result = "win" if interaction.user.id == uid else "lose"
                             self.disable_all()
+
+                        elif "" not in board:
+                            result = "draw"
+                            self.disable_all()
+
                         else:
-                            bot_move(board)
+                            if opponent:
+                                turn = opp_id if turn == uid else uid
+                            else:
+                                bot_move(board)
 
-                            if check_win(board, B):
-                                result = "lose"
-                                self.disable_all()
-                            elif "" not in board:
-                                result = "draw"
-                                self.disable_all()
+                                if check_win(board, P2):
+                                    result = "lose"
+                                    self.disable_all()
+                                elif "" not in board:
+                                    result = "draw"
+                                    self.disable_all()
 
-                        self.make_buttons()
+                        self.update_buttons()
 
                         img = draw_board(board)
                         file = discord.File(img, "board.png")
@@ -977,13 +973,7 @@ async def tic_tac_toe(interaction: discord.Interaction):
                         if result == "win":
                             reward = random.randint(2000, 4000)
                             total_wins += 1
-
-                            await users.update_one(
-                                {"id": uid},
-                                {"$inc": {"currency": reward}},
-                                upsert=True
-                            )
-
+                            await users.update_one({"id": uid}, {"$inc": {"currency": reward}}, upsert=True)
                             await interaction.followup.send(f"✧ round win +{reward}")
 
                         elif result == "lose":
@@ -996,8 +986,8 @@ async def tic_tac_toe(interaction: discord.Interaction):
                     self.add_item(btn)
 
             def disable_all(self):
-                for b in self.children:
-                    b.disabled = True
+                for item in self.children:
+                    item.disabled = True
 
         view = GameView()
 
@@ -1010,36 +1000,21 @@ async def tic_tac_toe(interaction: discord.Interaction):
         )
         embed.set_image(url="attachment://board.png")
 
-        await interaction.edit_original_response(
-            embed=embed,
-            attachments=[file],
-            view=view
-        )
+        await interaction.edit_original_response(embed=embed, attachments=[file], view=view)
 
-        # wait until round ends
+        # FIXED WAIT LOOP (no infinite thinking)
         while result is None:
             await asyncio.sleep(1)
 
         await asyncio.sleep(2)
 
-    # ======================
     # BONUS
-    # ======================
     if total_wins == 3:
         bonus = 10000
-        await users.update_one(
-            {"id": uid},
-            {"$inc": {"currency": bonus}, "$set": {"ttt_cd": time.time()}},
-            upsert=True
-        )
+        await users.update_one({"id": uid}, {"$inc": {"currency": bonus}, "$set": {"ttt_cd": time.time()}}, upsert=True)
         await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
     else:
-        await users.update_one(
-            {"id": uid},
-            {"$set": {"ttt_cd": time.time()}},
-            upsert=True
-        )
-
+        await users.update_one({"id": uid}, {"$set": {"ttt_cd": time.time()}}, upsert=True)
 
 print("TOKEN:", TOKEN)
 print("MONGO:", MONGO)
