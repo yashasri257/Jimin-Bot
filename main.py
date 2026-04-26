@@ -120,10 +120,15 @@ def draw_board(board):
     return buf
 
 async def get_card_by_rarity(rarities):
-    return await cards.aggregate([
-        {"$match": {"rarity": {"$in": rarities}, "droppable": True}},
-        {"$sample": {"size": 1}}
-    ]).to_list(1)
+    results = await cards.find({
+        "rarity": {"$in": rarities},
+        "droppable": True
+    }).to_list(50)  # limit to avoid heavy load
+
+    if not results:
+        return None
+
+    return random.choice(results)
     
 # ======================
 # ⏳ GLOBAL COOLDOWN SYSTEM (PERMANENT)
@@ -668,7 +673,7 @@ async def daily(interaction: discord.Interaction):
 # =========================
 # 📦 WEEKLY
 # =========================
-@tree.command(name="weekly", description="✧ claim weekly rewards")
+@tree.command(name="weekly", description="✧ claim weekly relics")
 async def weekly(interaction: discord.Interaction):
 
     uid = interaction.user.id
@@ -681,41 +686,32 @@ async def weekly(interaction: discord.Interaction):
         )
 
     await interaction.response.defer()
-    await set_cooldown(uid, "weekly")
 
-    # 💰 RELICS
     reward = random.randint(5000, 10000)
-
     cards_won = []
 
-    # 🌌 1 HIGH TIER
-    high = await get_card_by_rarity(["eclipse", "velour"])
-    if high:
-        cards_won.append(high[0])
+    # HIGH TIER
+    c = await get_card_by_rarity(["eclipse", "velour"])
+    if c: cards_won.append(c)
 
-    # 🃏 6 NORMAL
+    # NORMALS
     for _ in range(6):
-        c = await get_card_by_rarity(
-            ["siren", "enthrall", "devotion", "whisper", "cherub"]
-        )
-        if c:
-            cards_won.append(c[0])
+        c = await get_card_by_rarity(["siren","enthrall","devotion","whisper","cherub"])
+        if c: cards_won.append(c)
 
-    # 💾 UPDATE
+    # UPDATE DB
     update = {"currency": reward}
     for c in cards_won:
         update[f"cards.{c['card_code']}"] = 1
 
     await users.update_one({"id": uid}, {"$inc": update}, upsert=True)
 
-    embed = discord.Embed(
-        title="✧ weekly fortune ✧",
-        description=f"+{reward} {CURRENCY}\n🌌 1 high tier\n🃏 6 normal cards",
-        color=0x2b2d31
+    await set_cooldown(uid, "weekly")
+
+    await interaction.followup.send(
+        f"✧ weekly fortune\n+{reward} {CURRENCY}\n+{len(cards_won)} cards"
     )
-
-    await interaction.followup.send(embed=embed)
-
+    
 # =========================
 # 🩸 MONTHLY
 # =========================
@@ -732,57 +728,41 @@ async def monthly(interaction: discord.Interaction):
         )
 
     await interaction.response.defer()
-    await set_cooldown(uid, "monthly")
 
-    # 💰 RELICS
     reward = random.randint(45000, 75000)
-
     cards_won = []
 
-    # 🌌 5 HIGH TIER
+    # HIGH TIERS
     for _ in range(5):
         c = await get_card_by_rarity(["eclipse", "velour"])
-        if c:
-            cards_won.append(c[0])
+        if c: cards_won.append(c)
 
-    # 💎 10 DEVOTION
+    # DEVOTION
     for _ in range(10):
         c = await get_card_by_rarity(["devotion"])
-        if c:
-            cards_won.append(c[0])
+        if c: cards_won.append(c)
 
-    # 🔥 7 ENTHRALL
+    # ENTHRALL
     for _ in range(7):
         c = await get_card_by_rarity(["enthrall"])
-        if c:
-            cards_won.append(c[0])
+        if c: cards_won.append(c)
 
-    # 🎴 8 LOW
+    # LOW
     for _ in range(8):
-        c = await get_card_by_rarity(["siren", "cherub", "whisper"])
-        if c:
-            cards_won.append(c[0])
+        c = await get_card_by_rarity(["siren","cherub","whisper"])
+        if c: cards_won.append(c)
 
-    # 💾 UPDATE
     update = {"currency": reward}
     for c in cards_won:
         update[f"cards.{c['card_code']}"] = 1
 
     await users.update_one({"id": uid}, {"$inc": update}, upsert=True)
 
-    embed = discord.Embed(
-        title="✧ monthly fate ✧",
-        description=(
-            f"+{reward} {CURRENCY}\n"
-            f"🌌 5 high tier\n"
-            f"💎 10 devotion\n"
-            f"🔥 7 enthrall\n"
-            f"🎴 8 low tier"
-        ),
-        color=0x2b2d31
-    )
+    await set_cooldown(uid, "monthly")
 
-    await interaction.followup.send(embed=embed)
+    await interaction.followup.send(
+        f"✧ monthly fate\n+{reward} {CURRENCY}\n+{len(cards_won)} cards"
+    )
     
 # =========================
 #  VIEW
