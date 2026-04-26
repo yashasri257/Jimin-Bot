@@ -119,6 +119,12 @@ def draw_board(board):
     buf.seek(0)
     return buf
 
+async def get_card_by_rarity(rarities):
+    return await cards.aggregate([
+        {"$match": {"rarity": {"$in": rarities}, "droppable": True}},
+        {"$sample": {"size": 1}}
+    ]).to_list(1)
+    
 # ======================
 # ⏳ GLOBAL COOLDOWN SYSTEM (PERMANENT)
 # ======================
@@ -662,12 +668,11 @@ async def daily(interaction: discord.Interaction):
 # =========================
 # 📦 WEEKLY
 # =========================
-@tree.command(name="weekly", description="✧ claim weekly relics")
+@tree.command(name="weekly", description="✧ claim weekly rewards")
 async def weekly(interaction: discord.Interaction):
 
     uid = interaction.user.id
 
-    # ⛔ cooldown check FIRST (no defer yet)
     left = await check_cd(uid, "weekly", WEEKLY_CD)
     if left > 0:
         return await interaction.response.send_message(
@@ -675,30 +680,41 @@ async def weekly(interaction: discord.Interaction):
             ephemeral=True
         )
 
-    # ✅ defer AFTER passing cooldown
     await interaction.response.defer()
-
     await set_cooldown(uid, "weekly")
 
-    reward = random.randint(1500, 5000)
+    # 💰 RELICS
+    reward = random.randint(5000, 10000)
 
-    # ⚡ faster card fetching
     cards_won = []
-    for _ in range(7):
-        c = await get_card()
-        if c:
-            cards_won.append(c)
 
+    # 🌌 1 HIGH TIER
+    high = await get_card_by_rarity(["eclipse", "velour"])
+    if high:
+        cards_won.append(high[0])
+
+    # 🃏 6 NORMAL
+    for _ in range(6):
+        c = await get_card_by_rarity(
+            ["siren", "enthrall", "devotion", "whisper", "cherub"]
+        )
+        if c:
+            cards_won.append(c[0])
+
+    # 💾 UPDATE
     update = {"currency": reward}
     for c in cards_won:
         update[f"cards.{c['card_code']}"] = 1
 
     await users.update_one({"id": uid}, {"$inc": update}, upsert=True)
 
-    # ✅ ALWAYS RESPOND
-    await interaction.followup.send(
-        f"✧ weekly fortune\n+{reward} {CURRENCY}\n+{len(cards_won)} cards"
+    embed = discord.Embed(
+        title="✧ weekly fortune ✧",
+        description=f"+{reward} {CURRENCY}\n🌌 1 high tier\n🃏 6 normal cards",
+        color=0x2b2d31
     )
+
+    await interaction.followup.send(embed=embed)
 
 # =========================
 # 🩸 MONTHLY
@@ -708,7 +724,6 @@ async def monthly(interaction: discord.Interaction):
 
     uid = interaction.user.id
 
-    # ⛔ cooldown check FIRST
     left = await check_cd(uid, "monthly", MONTHLY_CD)
     if left > 0:
         return await interaction.response.send_message(
@@ -717,26 +732,57 @@ async def monthly(interaction: discord.Interaction):
         )
 
     await interaction.response.defer()
-
     await set_cooldown(uid, "monthly")
 
-    reward = random.randint(10000, 25000)
+    # 💰 RELICS
+    reward = random.randint(45000, 75000)
 
     cards_won = []
-    for _ in range(25):
-        c = await get_card()
-        if c:
-            cards_won.append(c)
 
+    # 🌌 5 HIGH TIER
+    for _ in range(5):
+        c = await get_card_by_rarity(["eclipse", "velour"])
+        if c:
+            cards_won.append(c[0])
+
+    # 💎 10 DEVOTION
+    for _ in range(10):
+        c = await get_card_by_rarity(["devotion"])
+        if c:
+            cards_won.append(c[0])
+
+    # 🔥 7 ENTHRALL
+    for _ in range(7):
+        c = await get_card_by_rarity(["enthrall"])
+        if c:
+            cards_won.append(c[0])
+
+    # 🎴 8 LOW
+    for _ in range(8):
+        c = await get_card_by_rarity(["siren", "cherub", "whisper"])
+        if c:
+            cards_won.append(c[0])
+
+    # 💾 UPDATE
     update = {"currency": reward}
     for c in cards_won:
         update[f"cards.{c['card_code']}"] = 1
 
     await users.update_one({"id": uid}, {"$inc": update}, upsert=True)
 
-    await interaction.followup.send(
-        f"✧ monthly fate\n+{reward} {CURRENCY}\n+{len(cards_won)} cards"
+    embed = discord.Embed(
+        title="✧ monthly fate ✧",
+        description=(
+            f"+{reward} {CURRENCY}\n"
+            f"🌌 5 high tier\n"
+            f"💎 10 devotion\n"
+            f"🔥 7 enthrall\n"
+            f"🎴 8 low tier"
+        ),
+        color=0x2b2d31
     )
+
+    await interaction.followup.send(embed=embed)
     
 # =========================
 #  VIEW
