@@ -1169,7 +1169,6 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # tic-tac-toe 
 # ======================
 @bot.tree.command(name="tic-tac-toe", description="✧ play tic-tac-toe with Jimin or a user")
-@bot.tree.command(name="tic-tac-toe", description="✧ play tic-tac-toe with Jimin or a user")
 async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
 
     uid = interaction.user.id
@@ -1186,16 +1185,17 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             ephemeral=True
         )
 
-    # ✅ ONLY ONE DEFER (RIGHT HERE)
+    # defer FIRST (important)
     await interaction.response.defer()
 
-    # ✅ NORMAL MESSAGE (PING WORKS)
+    # ping message (NOT embed)
     if opponent:
         await interaction.followup.send(
             f"✧ {interaction.user.mention} vs {opponent.mention} — game starting..."
         )
     else:
         await interaction.followup.send("✧ starting game...")
+
     P1 = "🌺"
     P2 = "🌹"
 
@@ -1246,12 +1246,15 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
     total_wins = 0
 
+    # ======================
+    # 3 ROUNDS
+    # ======================
     for round_no in range(1, 4):
 
         board = [""] * 9
         result = None
 
-        # 🎲 RANDOM STARTER
+        # random starter
         if opponent:
             turn = random.choice([uid, opp_id])
         else:
@@ -1272,7 +1275,7 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
                     btn = discord.ui.Button(
                         label=board[i] if board[i] else "⬛",
                         style=discord.ButtonStyle.secondary,
-                        row=i//3
+                        row=i // 3
                     )
 
                     async def callback(interaction: discord.Interaction, idx=i):
@@ -1375,7 +1378,7 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
         msg = await interaction.followup.send(embed=embed, view=view)
 
-        # ⏱ TIMEOUT SYSTEM (IMPORTANT)
+        # timeout system
         start_time = time.time()
 
         while result is None:
@@ -1398,9 +1401,8 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
         await asyncio.sleep(2)
 
     # ======================
-    # FINAL RESULT + COOLDOWN
+    # FINAL RESULT
     # ======================
-
     if total_wins > 0:
         await users.update_one(
             {"id": uid},
@@ -1415,14 +1417,14 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             {"$inc": {"currency": bonus}},
             upsert=True
         )
-        await interaction.followup.send(f"PERFECT GAME +{bonus} RELICS")
+        await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
 
     elif total_wins > 0:
         await interaction.followup.send("✧ game finished — cooldown applied")
 
     else:
-        await interaction.followup.send("✧ no wins — you can play again, no cooldown applied!")
-        
+        await interaction.followup.send("✧ no wins — you can play again immediately")
+                            
 # ======================
 # reset cooldowns 
 # ======================
