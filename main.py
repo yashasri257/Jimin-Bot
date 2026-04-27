@@ -1169,6 +1169,7 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # tic-tac-toe 
 # ======================
 @bot.tree.command(name="tic-tac-toe", description="✧ play tic-tac-toe with Jimin or a user")
+@bot.tree.command(name="tic-tac-toe", description="✧ play tic-tac-toe with Jimin or a user")
 async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
 
     uid = interaction.user.id
@@ -1185,17 +1186,16 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             ephemeral=True
         )
 
-    # FIRST defer silently
-await interaction.response.defer()
+    # ✅ ONLY ONE DEFER (RIGHT HERE)
+    await interaction.response.defer()
 
-# THEN send a NORMAL message (this WILL ping properly)
-if opponent:
-    await interaction.followup.send(
-        f"✧ {interaction.user.mention} vs {opponent.mention} — game starting..."
-    )
-else:
-    await interaction.followup.send("✧ starting game...")
-    
+    # ✅ NORMAL MESSAGE (PING WORKS)
+    if opponent:
+        await interaction.followup.send(
+            f"✧ {interaction.user.mention} vs {opponent.mention} — game starting..."
+        )
+    else:
+        await interaction.followup.send("✧ starting game...")
     P1 = "🌺"
     P2 = "🌹"
 
