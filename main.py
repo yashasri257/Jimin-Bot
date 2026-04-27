@@ -1172,11 +1172,12 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
 
     uid = interaction.user.id
+    opp_id = opponent.id if opponent else None
 
     data = await users.find_one({"id": uid}) or {}
     last_cd = data.get("ttt_cd", 0)
 
-    # cooldown check FIRST (before defer)
+    # cooldown check
     if time.time() - last_cd < 1800:
         remaining = int(1800 - (time.time() - last_cd))
         return await interaction.response.send_message(
@@ -1184,11 +1185,14 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             ephemeral=True
         )
 
-    # THEN defer (only if allowed to play)
-    await interaction.response.defer()
+    # PvP ping message FIRST
+    if opponent:
+        await interaction.response.send_message(
+            f"✧ {interaction.user.mention} vs {opponent.mention} — game starting..."
+        )
+    else:
+        await interaction.response.send_message("✧ starting game...")
 
-    opp_id = opponent.id if opponent else None
-    
     P1 = "🌺"
     P2 = "🌹"
 
@@ -1226,6 +1230,12 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             board[4]=P2
             return
 
+        # corners
+        for i in [0,2,6,8]:
+            if board[i]=="":
+                board[i]=P2
+                return
+
         # random
         empty=[i for i,v in enumerate(board) if v==""]
         if empty:
@@ -1235,9 +1245,17 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
     for round_no in range(1, 4):
 
-        board = [""]*9
+        board = [""] * 9
         result = None
-        turn = uid
+
+        # 🎲 RANDOM STARTER
+        if opponent:
+            turn = random.choice([uid, opp_id])
+        else:
+            starter = random.choice(["player", "bot"])
+            turn = uid
+            if starter == "bot":
+                bot_move(board)
 
         class GameView(discord.ui.View):
             def __init__(self):
@@ -1257,7 +1275,7 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
                     async def callback(interaction: discord.Interaction, idx=i):
                         nonlocal result, turn, total_wins
 
-                        # PvP turn check
+                        # PvP checks
                         if opponent:
                             if interaction.user.id not in [uid, opp_id]:
                                 return await interaction.response.send_message("✧ not your game", ephemeral=True)
@@ -1278,7 +1296,7 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
                         board[idx] = symbol
 
-                        # check win
+                        # check result
                         if check_win(board, symbol):
                             result = "win" if interaction.user.id == uid else "lose"
                             self.disable_all()
@@ -1288,7 +1306,6 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
                             self.disable_all()
 
                         else:
-                            # bot move
                             if not opponent:
                                 bot_move(board)
 
@@ -1305,14 +1322,15 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
                         embed = discord.Embed(
                             title=f"✧ TIC TAC TOE ✧ 〔ROUND {round_no}〕",
-                            description=f"Turn: <@{turn}>" if opponent and not result else "",
+                            description=(
+                                f"Turn: <@{turn}>"
+                                if opponent and not result
+                                else ("Your move" if not opponent and not result else "")
+                            ),
                             color=0x2b2d31
                         )
 
-                        await interaction.response.edit_message(
-                            embed=embed,
-                            view=self
-                        )
+                        await interaction.response.edit_message(embed=embed, view=self)
 
                         # rewards
                         if result == "win":
@@ -1344,27 +1362,43 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
         embed = discord.Embed(
             title=f"✧ TIC TAC TOE ✧ 〔ROUND {round_no}〕",
-            description=f"Turn: <@{uid}>" if opponent else "Your move",
+            description=(
+                f"Turn: <@{turn}>"
+                if opponent
+                else ("Bot started" if 'starter' in locals() and starter == "bot" else "Your move")
+            ),
             color=0x2b2d31
         )
 
-        await interaction.edit_original_response(
-            embed=embed,
-            view=view
-        )
+        msg = await interaction.followup.send(embed=embed, view=view)
 
-        # wait until round ends
+        # ⏱ TIMEOUT SYSTEM (IMPORTANT)
+        start_time = time.time()
+
         while result is None:
             await asyncio.sleep(1)
 
+            if time.time() - start_time > 60:
+                result = "timeout"
+                view.disable_all()
+
+                try:
+                    await msg.edit(view=view)
+                except:
+                    pass
+
+                await interaction.followup.send(
+                    f"✧ game ended — <@{turn}> didn’t respond"
+                )
+                break
+
         await asyncio.sleep(2)
 
-# ======================
-# FINAL RESULT + COOLDOWN LOGIC
-# ======================
+    # ======================
+    # FINAL RESULT + COOLDOWN
+    # ======================
 
     if total_wins > 0:
-        # apply cooldown ONLY if user won at least one round
         await users.update_one(
             {"id": uid},
             {"$set": {"ttt_cd": time.time()}},
@@ -1378,14 +1412,14 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             {"$inc": {"currency": bonus}},
             upsert=True
         )
-        await interaction.followup.send(f"🔥 PERFECT GAME +{bonus} RELICS")
+        await interaction.followup.send(f"PERFECT GAME +{bonus} RELICS")
 
     elif total_wins > 0:
         await interaction.followup.send("✧ game finished — cooldown applied")
 
     else:
-        await interaction.followup.send("✧ no wins — you can play again immediately")
-
+        await interaction.followup.send("✧ no wins — you can play again, no cooldown applied!")
+        
 # ======================
 # reset cooldowns 
 # ======================
