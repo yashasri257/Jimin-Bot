@@ -1185,14 +1185,17 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
             ephemeral=True
         )
 
-    # PvP ping message FIRST
-    if opponent:
-        await interaction.response.send_message(
-            f"✧ {interaction.user.mention} vs {opponent.mention} — game starting..."
-        )
-    else:
-        await interaction.response.send_message("✧ starting game...")
+    # FIRST defer silently
+await interaction.response.defer()
 
+# THEN send a NORMAL message (this WILL ping properly)
+if opponent:
+    await interaction.followup.send(
+        f"✧ {interaction.user.mention} vs {opponent.mention} — game starting..."
+    )
+else:
+    await interaction.followup.send("✧ starting game...")
+    
     P1 = "🌺"
     P2 = "🌹"
 
