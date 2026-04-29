@@ -468,18 +468,22 @@ async def mass_edit(
 last_drop = {}
 last_claim = {}
 
+async def get_card():
+    return await get_card_by_rarity(RARITIES)
+
+
 class DropView(discord.ui.View):
     def __init__(self, cards_list, owner):
         super().__init__(timeout=60)
         self.cards = cards_list
         self.owner = owner
-        self.claimed = [False]*3
+        self.claimed = [False] * 3
         self.start = now()
 
-    async def handle(self, interaction, idx):
+    async def handle(self, interaction: discord.Interaction, idx: int):
         uid = interaction.user.id
 
-        # owner priority
+        # owner priority (25s)
         if uid != self.owner and now() - self.start < 25:
             return await interaction.response.send_message(
                 "✧ wait for the summoner...",
@@ -489,7 +493,7 @@ class DropView(discord.ui.View):
         if self.claimed[idx]:
             return await interaction.response.send_message("✧ taken", ephemeral=True)
 
-        if cd_left(last_claim.get(uid,0), CLAIM_CD) > 0:
+        if cd_left(last_claim.get(uid, 0), CLAIM_CD) > 0:
             return await interaction.response.send_message("✧ slow down...", ephemeral=True)
 
         last_claim[uid] = now()
@@ -497,18 +501,20 @@ class DropView(discord.ui.View):
 
         card = self.cards[idx]
 
+        # give card
         await users.update_one(
-            {"id":uid},
-            {"$inc":{f"cards.{card['card_code']}":1}},
+            {"id": uid},
+            {"$inc": {f"cards.{card['card_code']}": 1}},
             upsert=True
         )
 
+        # disable clicked button
         self.children[idx].disabled = True
         await interaction.response.edit_message(view=self)
 
         await interaction.followup.send("✧ revealing...")
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(2)
 
         e = discord.Embed(
             title=card["name"],
@@ -520,13 +526,17 @@ class DropView(discord.ui.View):
         await interaction.followup.send(embed=e)
 
     @discord.ui.button(label="1")
-    async def b1(self,i,b): await self.handle(i,0)
+    async def b1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle(interaction, 0)
 
     @discord.ui.button(label="2")
-    async def b2(self,i,b): await self.handle(i,1)
+    async def b2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle(interaction, 1)
 
     @discord.ui.button(label="3")
-    async def b3(self,i,b): await self.handle(i,2)
+    async def b3(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle(interaction, 2)
+
 
 @tree.command(name="drop", description="✧ summon cards")
 async def drop(interaction: discord.Interaction):
@@ -535,42 +545,49 @@ async def drop(interaction: discord.Interaction):
 
     uid = interaction.user.id
 
-    if cd_left(last_drop.get(uid,0), DROP_CD) > 0:
+    # cooldown check
+    if cd_left(last_drop.get(uid, 0), DROP_CD) > 0:
         return await interaction.edit_original_response(content="✧ return later...")
 
     last_drop[uid] = now()
 
-async def get_card():
-    return await get_card_by_rarity(RARITIES)
-    
-chosen = []
+    # get 3 cards
+    chosen = []
     for _ in range(3):
         c = await get_card()
         if not c:
             return await interaction.edit_original_response(content="✧ no cards yet")
         chosen.append(c)
 
-    backs = [c["rarity_back"] for c in chosen]
-    img = await merge(backs)
+    # merge backs (make sure merge() exists)
+    backs = [c.get("rarity_back") for c in chosen if c.get("rarity_back")]
 
-    file = discord.File(img, "drop.png")
+    if backs:
+        img = await merge(backs)
+        file = discord.File(img, "drop.png")
+        attachments = [file]
+    else:
+        attachments = []
 
+    # embed
     e = discord.Embed(
         title="✧ ethereal descent ✧",
         description="three magical creatures descend...\nchoose one",
         color=0x2b2d31
     )
 
-    for i,c in enumerate(chosen,1):
-        e.add_field(name=f"{i}. {c['rarity']}", value=c["group"])
+    for i, c in enumerate(chosen, 1):
+        emoji = rarity_emoji(c["rarity"])
+        e.add_field(name=f"{i}. {emoji} {c['rarity']}", value=c["group"])
 
+    # send
     await interaction.edit_original_response(
         content=None,
         embed=e,
-        attachments=[file],
+        attachments=attachments,
         view=DropView(chosen, uid)
     )
-
+    
 
 # ======================
 # INVENTORY (FAST)
@@ -1218,7 +1235,7 @@ async def profile(interaction: discord.Interaction, user: discord.User = None):
 # ======================
 # tic-tac-toe 
 # ======================
-@bot.tree.command(name="tic-tac-toe", description="✧ play tic-tac-toe with Jimin or a user")
+@bot.tree.command(name="tic-tac-toe", description="✧ play tic-tac-toe with Winter or a user")
 async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member = None):
 
     uid = interaction.user.id
