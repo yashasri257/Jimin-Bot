@@ -1535,7 +1535,7 @@ pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
     # ======================
     # VIEW
     # ======================
-    class SearchView(discord.ui.View):
+class SearchView(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=120)
             self.page = 0
@@ -1550,31 +1550,23 @@ pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
 
             await interaction.response.edit_message(embed=embed, view=self)
 
-        @discord.ui.button(label="◀")
-        async def prev(self, interaction, button):
-            if self.page > 0:
-                self.page -= 1
-            await self.update(interaction)
-
-        @discord.ui.button(label="▶")
-        async def next(self, interaction, button):
-            if self.page < len(pages) - 1:
-                self.page += 1
-            await self.update(interaction)
-
         @discord.ui.button(label="Preview")
-        async def preview(self, interaction, button):
-            idx = self.page * 6
-            card = results[idx]
+async def preview(self, interaction, button):
+    page_cards = results[self.page*6:(self.page+1)*6]
 
-            e = discord.Embed(
-                title=card["name"],
-                description=f"{card['group']} • {card['rarity']}",
-                color=0x2b2d31
-            )
-            e.set_image(url=card["image_url"])
+    if not page_cards:
+        return await interaction.response.send_message("✧ nothing to preview", ephemeral=True)
 
-            await interaction.response.send_message(embed=e, ephemeral=True)
+    card = page_cards[0]  # first card of current page
+
+    e = discord.Embed(
+        title=card["name"],
+        description=f"{card['group']} • {card['rarity']}",
+        color=0x2b2d31
+    )
+    e.set_image(url=card["image_url"])
+
+    await interaction.response.send_message(embed=e, ephemeral=True)
 
     # ======================
     # FIRST PAGE
