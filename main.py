@@ -62,6 +62,7 @@ RARITY_EMOJIS = {
     "eclipse": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955030969974815/Untitled13_20260329201615.png?ex=69f30a28&is=69f1b8a8&hm=15ac50796bb62537279acb90ef023f54fdeebdace89c802a869198dea0e90f56&",
     "velour": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955109927878676/Untitled13_20260329001614.png?ex=69f30a3b&is=69f1b8bb&hm=d6c3ed50e6ed5d5a0ff7391c7264ec0715f5e2e7db04ff1b24bc8b34300bed89&",
     "sanctum": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955114839412816/Untitled13_20260329231514.png?ex=69f30a3c&is=69f1b8bc&hm=91629ed34a811c71e98e7b4b3ac8f94c1ad20ce92067652b6ebaf7f448a13b2b&",
+}
 # ======================
 # BOT SETUP
 # ======================
