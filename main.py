@@ -41,6 +41,17 @@ WEEKLY_CD = 604800
 MONTHLY_CD = 2592000
 
 RARITIES = ["whisper","cherub","siren","enthrall","devotion","eclipse","velour","fallen","sanctum"]
+RARITY_CHOICES = [
+    app_commands.Choice(name="Whisper", value="whisper"),
+    app_commands.Choice(name="Cherub", value="cherub"),
+    app_commands.Choice(name="Siren", value="siren"),
+    app_commands.Choice(name="Enthrall", value="enthrall"),
+    app_commands.Choice(name="Devotion", value="devotion"),
+    app_commands.Choice(name="Fallen", value="fallen"),
+    app_commands.Choice(name="Eclipse", value="eclipse"),
+    app_commands.Choice(name="Velour", value="velour"),
+    app_commands.Choice(name="Sanctum", value="sanctum"),
+]
 RARITY_EMOJIS = {
     "whisper": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954806402875475/Untitled13_20260329154525.png",
     "cherub": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954841836228739/Untitled13_20260329155942.png",
