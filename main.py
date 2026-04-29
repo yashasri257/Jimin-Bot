@@ -151,9 +151,9 @@ async def get_card_by_rarity(rarities):
 
     return random.choice(results)
 
-def rarity_emoji(rarity):
-    return RARITY_EMOJIS.get(rarity, "✦")
-    
+def rarity_emoji(rarity: str):
+    return RARITY_EMOJIS.get(rarity.lower(), "✦")
+
 # ======================
 # ⏳ GLOBAL COOLDOWN SYSTEM (PERMANENT)
 # ======================
@@ -540,7 +540,10 @@ async def drop(interaction: discord.Interaction):
 
     last_drop[uid] = now()
 
-    chosen = []
+async def get_card():
+    return await get_card_by_rarity(RARITIES)
+    
+chosen = []
     for _ in range(3):
         c = await get_card()
         if not c:
@@ -554,7 +557,7 @@ async def drop(interaction: discord.Interaction):
 
     e = discord.Embed(
         title="✧ ethereal descent ✧",
-        description="three unseen cards descend...\nchoose one",
+        description="three magical creatures descend...\nchoose one",
         color=0x2b2d31
     )
 
@@ -609,26 +612,26 @@ async def inventory(
 
     lines = []
 
-for c in cards_data:
-    count = valid.get(c["card_code"], 0)
-    if count <= 0:
-        continue
-
-    if dupes:
-        count -= 1
+    for c in cards_data:
+        count = valid.get(c["card_code"], 0)
         if count <= 0:
             continue
 
-    emoji = rarity_emoji(c["rarity"])
+        if dupes:
+            count -= 1
+            if count <= 0:
+                continue
 
-    lines.append(
-        f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
-        f"〔{c['rarity']}〕 • `{c['card_code']}` • {count}"
-    )
+        emoji = rarity_emoji(c["rarity"])
 
-if not lines:
-    return await interaction.followup.send("✧ nothing matches...")
-    
+        lines.append(
+            f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
+            f"〔{c['rarity']}〕 • `{c['card_code']}` • {count}"
+        )
+
+    if not lines:
+        return await interaction.followup.send("✧ nothing matches...")
+
     lines.sort(key=lambda x: x.lower())
     pages = [lines[i:i+5] for i in range(0, len(lines), 5)]
 
@@ -652,7 +655,7 @@ if not lines:
             await interaction.response.edit_message(embed=embed, view=self)
 
         @discord.ui.button(label="◀")
-        async def prev(self, interaction, button):
+        async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
             if interaction.user.id != target.id:
                 return await interaction.response.send_message("✧ not yours", ephemeral=True)
             if self.page > 0:
@@ -660,7 +663,7 @@ if not lines:
             await self.update(interaction)
 
         @discord.ui.button(label="▶")
-        async def next(self, interaction, button):
+        async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
             if interaction.user.id != target.id:
                 return await interaction.response.send_message("✧ not yours", ephemeral=True)
             if self.page < len(pages)-1:
@@ -1493,20 +1496,14 @@ async def search(
 ):
     await interaction.response.defer()
 
-    # ======================
-    # BUILD QUERY
-    # ======================
     query = {}
 
     if name:
         query["name"] = {"$regex": name, "$options": "i"}
-
     if group:
         query["group"] = {"$regex": group, "$options": "i"}
-
     if rarity:
         query["rarity"] = rarity.value
-
     if era:
         query["era"] = {"$regex": era, "$options": "i"}
 
@@ -1515,9 +1512,6 @@ async def search(
     if not results:
         return await interaction.followup.send("✧ no cards found")
 
-    # ======================
-    # FORMAT RESULTS
-    # ======================
     lines = []
     for c in results:
         emoji = rarity_emoji(c["rarity"])
@@ -1530,9 +1524,6 @@ async def search(
     lines.sort(key=lambda x: x.lower())
     pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
 
-    # ======================
-    # VIEW
-    # ======================
     class SearchView(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=120)
@@ -1570,7 +1561,7 @@ async def search(
                     "✧ nothing to preview", ephemeral=True
                 )
 
-            card = page_cards[0]  # first card in page
+            card = page_cards[0]
 
             e = discord.Embed(
                 title=card["name"],
@@ -1581,9 +1572,6 @@ async def search(
 
             await interaction.response.send_message(embed=e, ephemeral=True)
 
-    # ======================
-    # FIRST PAGE
-    # ======================
     embed = discord.Embed(
         description="\n\n".join(pages[0]),
         color=0x2b2d31
