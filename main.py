@@ -1515,27 +1515,25 @@ async def search(
     if not results:
         return await interaction.followup.send("✧ no cards found")
 
-    
     # ======================
-    # FORMAT
+    # FORMAT RESULTS
     # ======================
     lines = []
+    for c in results:
+        emoji = rarity_emoji(c["rarity"])
 
-for c in results:
-    emoji = rarity_emoji(c["rarity"])
+        lines.append(
+            f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
+            f"〔{c['rarity']}〕 • `{c['card_code']}` • {c.get('era','—')}"
+        )
 
-    lines.append(
-        f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
-        f"〔{c['rarity']}〕 • `{c['card_code']}` • {c.get('era','—')}"
-    )
-
-lines.sort(key=lambda x: x.lower())
-pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
+    lines.sort(key=lambda x: x.lower())
+    pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
 
     # ======================
     # VIEW
     # ======================
-class SearchView(discord.ui.View):
+    class SearchView(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=120)
             self.page = 0
@@ -1546,27 +1544,42 @@ class SearchView(discord.ui.View):
                 color=0x2b2d31
             )
             embed.set_author(name="✧ card search")
-            embed.set_footer(text=f"{self.page+1}/{len(pages)} • {len(results)} results")
-
+            embed.set_footer(
+                text=f"{self.page+1}/{len(pages)} • {len(results)} results"
+            )
             await interaction.response.edit_message(embed=embed, view=self)
 
+        @discord.ui.button(label="◀")
+        async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if self.page > 0:
+                self.page -= 1
+            await self.update(interaction)
+
+        @discord.ui.button(label="▶")
+        async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if self.page < len(pages) - 1:
+                self.page += 1
+            await self.update(interaction)
+
         @discord.ui.button(label="Preview")
-async def preview(self, interaction, button):
-    page_cards = results[self.page*6:(self.page+1)*6]
+        async def preview(self, interaction: discord.Interaction, button: discord.ui.Button):
+            page_cards = results[self.page*6:(self.page+1)*6]
 
-    if not page_cards:
-        return await interaction.response.send_message("✧ nothing to preview", ephemeral=True)
+            if not page_cards:
+                return await interaction.response.send_message(
+                    "✧ nothing to preview", ephemeral=True
+                )
 
-    card = page_cards[0]  # first card of current page
+            card = page_cards[0]  # first card in page
 
-    e = discord.Embed(
-        title=card["name"],
-        description=f"{card['group']} • {card['rarity']}",
-        color=0x2b2d31
-    )
-    e.set_image(url=card["image_url"])
+            e = discord.Embed(
+                title=card["name"],
+                description=f"{card['group']} • {card['rarity']}",
+                color=0x2b2d31
+            )
+            e.set_image(url=card["image_url"])
 
-    await interaction.response.send_message(embed=e, ephemeral=True)
+            await interaction.response.send_message(embed=e, ephemeral=True)
 
     # ======================
     # FIRST PAGE
@@ -1579,7 +1592,7 @@ async def preview(self, interaction, button):
     embed.set_footer(text=f"1/{len(pages)} • {len(results)} results")
 
     await interaction.followup.send(embed=embed, view=SearchView())
-
+    
 # ======================
 # reset cooldowns 
 # ======================
