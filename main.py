@@ -53,15 +53,15 @@ RARITY_CHOICES = [
     app_commands.Choice(name="Sanctum", value="sanctum"),
 ]
 RARITY_EMOJIS = {
-    "whisper": "<:whisper:1495747524479418369>",
-    "cherub": "<:cherub:1495747646487531611>",
-    "siren": "<:siren:1495747818269311006>",
-    "enthrall": "<:enthrall:1495747990688628787>",
-    "devotion": "<:devotion:1495748091196739734>",
-    "fallen": "<:fallen:1495748300652155022>",
-    "eclipse": "<:eclipse:1495748379937079379>",
-    "velour": "<:velour:1495748496970481746>",
-    "sanctum": "<:sanctum:1495748613471604746>",
+    "whisper": "<:whisper:1498991362396131389>",
+    "cherub": "<:cherub:1498991360227934299>",
+    "siren": "<:siren:1498991357904158810>",
+    "enthrall": "<:enthrall:1498991347380523048>",
+    "devotion": "<:devotion:1498991355890761868>",
+    "fallen": "<:fallen:1498991353290555432>",
+    "eclipse": "<:eclipse:1498991351285678243>",
+    "velour": "<:velour:1498991364556324884>",
+    "sanctum": "<:sanctum:1498991349347647559>",
 }
 # ======================
 # BOT SETUP
@@ -151,8 +151,8 @@ async def get_card_by_rarity(rarities):
 
     return random.choice(results)
 
-def get_rarity_emoji(r):
-    return RARITY_EMOJIS.get(r, "")
+def rarity_emoji(rarity):
+    return RARITY_EMOJIS.get(rarity, "✦")
     
 # ======================
 # ⏳ GLOBAL COOLDOWN SYSTEM (PERMANENT)
@@ -618,10 +618,10 @@ async def inventory(
             if count <= 0:
                 continue
 
-        emoji = get_rarity_emoji(c["rarity"])
+        emoji = rarity_emoji(c["rarity"])
 
-        lines.append(
-            f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
+lines.append(
+    f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
             f"〔{c['rarity']}〕 • `{c['card_code']}` • {count}"
         )
 
@@ -1470,7 +1470,121 @@ async def tic_tac_toe(interaction: discord.Interaction, opponent: discord.Member
 
     else:
         await interaction.followup.send("✧ no wins — you can play again immediately")
-                            
+
+
+# ======================
+# search 
+# ======================
+@tree.command(name="search", description="✧ search for cards in the bot")
+@app_commands.describe(
+    name="filter by idol name",
+    group="filter by group",
+    rarity="filter by rarity",
+    era="filter by era"
+)
+@app_commands.choices(rarity=RARITY_CHOICES)
+async def search(
+    interaction: discord.Interaction,
+    name: str = None,
+    group: str = None,
+    rarity: app_commands.Choice[str] = None,
+    era: str = None
+):
+    await interaction.response.defer()
+
+    # ======================
+    # BUILD QUERY
+    # ======================
+    query = {}
+
+    if name:
+        query["name"] = {"$regex": name, "$options": "i"}
+
+    if group:
+        query["group"] = {"$regex": group, "$options": "i"}
+
+    if rarity:
+        query["rarity"] = rarity.value
+
+    if era:
+        query["era"] = {"$regex": era, "$options": "i"}
+
+    results = await cards.find(query).to_list(None)
+
+    if not results:
+        return await interaction.followup.send("✧ no cards found")
+
+    # ======================
+    # FORMAT
+    # ======================
+    lines = []
+    for c in results:
+        emoji = rarity_emoji(c["rarity"])
+
+lines.append(
+    f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
+    f"〔{c['rarity']}〕 • `{c['card_code']}` • {c.get('era','—')}"
+)
+
+    lines.sort(key=lambda x: x.lower())
+    pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
+
+    # ======================
+    # VIEW
+    # ======================
+    class SearchView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
+            self.page = 0
+
+        async def update(self, interaction):
+            embed = discord.Embed(
+                description="\n\n".join(pages[self.page]),
+                color=0x2b2d31
+            )
+            embed.set_author(name="✧ card search")
+            embed.set_footer(text=f"{self.page+1}/{len(pages)} • {len(results)} results")
+
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        @discord.ui.button(label="◀")
+        async def prev(self, interaction, button):
+            if self.page > 0:
+                self.page -= 1
+            await self.update(interaction)
+
+        @discord.ui.button(label="▶")
+        async def next(self, interaction, button):
+            if self.page < len(pages) - 1:
+                self.page += 1
+            await self.update(interaction)
+
+        @discord.ui.button(label="Preview")
+        async def preview(self, interaction, button):
+            idx = self.page * 6
+            card = results[idx]
+
+            e = discord.Embed(
+                title=card["name"],
+                description=f"{card['group']} • {card['rarity']}",
+                color=0x2b2d31
+            )
+            e.set_image(url=card["image_url"])
+
+            await interaction.response.send_message(embed=e, ephemeral=True)
+
+    # ======================
+    # FIRST PAGE
+    # ======================
+    embed = discord.Embed(
+        description="\n\n".join(pages[0]),
+        color=0x2b2d31
+    )
+    embed.set_author(name="✧ card search")
+    embed.set_footer(text=f"1/{len(pages)} • {len(results)} results")
+
+    await interaction.followup.send(embed=embed, view=SearchView())
+
 # ======================
 # reset cooldowns 
 # ======================
