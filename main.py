@@ -41,7 +41,17 @@ WEEKLY_CD = 604800
 MONTHLY_CD = 2592000
 
 RARITIES = ["whisper","cherub","siren","enthrall","devotion","eclipse","velour","fallen","sanctum"]
-
+RARITY_EMOJIS = {
+    "whisper": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954806402875475/Untitled13_20260329154525.png",
+    "cherub": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954841836228739/Untitled13_20260329155942.png",
+    "siren": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954882214793266/Untitled13_20260329183750.png",
+    "enthrall": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954929199517787/Untitled13_20260329235353.png",
+    "devotion": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954951991365652/Untitled13_20260329185342.png",
+    "fallen": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955003816181932/Untitled13_20260329194919.png",
+    "eclipse": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955030969974815/Untitled13_20260329201615.png",
+    "velour": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955109927878676/Untitled13_20260329001614.png",
+    "sanctum": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955114839412816/Untitled13_20260329231514.png",
+}
 # ======================
 # BOT SETUP
 # ======================
@@ -129,6 +139,9 @@ async def get_card_by_rarity(rarities):
         return None
 
     return random.choice(results)
+
+def get_rarity_emoji(r):
+    return RARITY_EMOJIS.get(r, "")
     
 # ======================
 # ⏳ GLOBAL COOLDOWN SYSTEM (PERMANENT)
@@ -159,16 +172,24 @@ def fmt(sec):
     m = (sec % 3600) // 60
     s = sec % 60
     return f"{h}h {m}m {s}s"
-    
+
+
 # ======================
 # ADD CARD
 # ======================
-
-@tree.command(name="add_card", description="✧ add a new card (staff)")
-async def add_card(interaction: discord.Interaction,
-    name: str, group: str, rarity: str,
-    card_code: str, image_url: str,
-    droppable: bool, rarity_back: str = None, era: str = None):
+@tree.command(name="add_card", description="✧ add a new card (staff only)")
+@app_commands.choices(rarity=RARITY_CHOICES)
+async def add_card(
+    interaction: discord.Interaction,
+    name: str,
+    group: str,
+    rarity: app_commands.Choice[str],
+    card_code: str,
+    image_url: str,
+    droppable: bool,
+    rarity_back: str = None,
+    era: str = None
+):
 
     if not is_staff(interaction.user.id):
         return await interaction.response.send_message("✧ no permission", ephemeral=True)
@@ -176,7 +197,7 @@ async def add_card(interaction: discord.Interaction,
     await cards.insert_one({
         "name": name,
         "group": group.lower(),
-        "rarity": rarity.lower(),
+        "rarity": rarity.value,
         "card_code": card_code.lower(),
         "image_url": image_url,
         "droppable": droppable,
@@ -184,8 +205,18 @@ async def add_card(interaction: discord.Interaction,
         "era": era
     })
 
-    await interaction.response.send_message("✧ card added")
-        
+    emoji = get_rarity_emoji(rarity.value)
+
+    embed = discord.Embed(
+        title="✧ card added",
+        description=f"{emoji} **{name}** | {group} | {rarity.name}",
+        color=0x2b2d31
+    )
+
+    embed.set_image(url=image_url)
+
+    await interaction.response.send_message(embed=embed)
+    
 # ======================
 # DELETE
 # ======================
@@ -526,16 +557,18 @@ async def drop(interaction: discord.Interaction):
         view=DropView(chosen, uid)
     )
 
+
 # ======================
 # INVENTORY (FAST)
 # ======================
 @tree.command(name="inventory", description="✧ view collection")
+@app_commands.choices(rarity=RARITY_CHOICES)
 async def inventory(
     interaction: discord.Interaction,
     user: discord.Member=None,
     name: str=None,
     group: str=None,
-    rarity: str=None,
+    rarity: app_commands.Choice[str]=None,
     era: str=None,
     dupes: bool=False
 ):
@@ -557,7 +590,7 @@ async def inventory(
     if group:
         query["group"] = {"$regex": group, "$options": "i"}
     if rarity:
-        query["rarity"] = rarity.lower()
+        query["rarity"] = rarity.value
     if era:
         query["era"] = {"$regex": era, "$options": "i"}
 
@@ -574,8 +607,10 @@ async def inventory(
             if count <= 0:
                 continue
 
+        emoji = get_rarity_emoji(c["rarity"])
+
         lines.append(
-            f"✦ **{c['group']}** ⟡ {c['name']}\n"
+            f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
             f"〔{c['rarity']}〕 • `{c['card_code']}` • {count}"
         )
 
@@ -631,7 +666,7 @@ async def inventory(
     embed.set_footer(text=f"1/{len(pages)} • total: {len(lines)} cards")
 
     await interaction.followup.send(embed=embed, view=InvView())
-
+    
 # =========================
 # ⏳ TIME FORMAT
 # =========================
