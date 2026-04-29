@@ -53,16 +53,15 @@ RARITY_CHOICES = [
     app_commands.Choice(name="Sanctum", value="sanctum"),
 ]
 RARITY_EMOJIS = {
-    "whisper": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954806402875475/Untitled13_20260329154525.png",
-    "cherub": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954841836228739/Untitled13_20260329155942.png",
-    "siren": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954882214793266/Untitled13_20260329183750.png",
-    "enthrall": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954929199517787/Untitled13_20260329235353.png",
-    "devotion": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954951991365652/Untitled13_20260329185342.png",
-    "fallen": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955003816181932/Untitled13_20260329194919.png",
-    "eclipse": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955030969974815/Untitled13_20260329201615.png",
-    "velour": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955109927878676/Untitled13_20260329001614.png",
-    "sanctum": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955114839412816/Untitled13_20260329231514.png",
-}
+    "whisper": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954806402875475/Untitled13_20260329154525.png?ex=69f309f3&is=69f1b873&hm=6934a9a346d409ad3d56819c126dbec693ab8cd588cf71dd67eb0cc564c8ed96&",
+    "cherub": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954841836228739/Untitled13_20260329155942.png?ex=69f309fb&is=69f1b87b&hm=485109b73fdc137d59822daa3f21615a9e98f969f1d22ab33e8f884cac017169&",
+    "siren": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954882214793266/Untitled13_20260329183750.png?ex=69f30a05&is=69f1b885&hm=8828ccbb198d35159d875a8a7dc2fd1f52cfeb3dc1d13524924bf3f7952a23bd&",
+    "enthrall": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954929199517787/Untitled13_20260329235353.png?ex=69f30a10&is=69f1b890&hm=b1e9945a576b8efe708a228d6014bb15cd40303fb187695f39e5fb1896e7f63d&",
+    "devotion": "https://cdn.discordapp.com/attachments/1487054242244984957/1498954951991365652/Untitled13_20260329185342.png?ex=69f30a15&is=69f1b895&hm=cfd8eaf72e8add8c90e1b51d48857c3c71dfa5f0be50e44c20ba1ad510ec21fa&",
+    "fallen": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955003816181932/Untitled13_20260329194919.png?ex=69f30a22&is=69f1b8a2&hm=79bcb8683a07dc991d9c1724faf19141775c409f7b530a4cc918e0f34bed360e&",
+    "eclipse": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955030969974815/Untitled13_20260329201615.png?ex=69f30a28&is=69f1b8a8&hm=15ac50796bb62537279acb90ef023f54fdeebdace89c802a869198dea0e90f56&",
+    "velour": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955109927878676/Untitled13_20260329001614.png?ex=69f30a3b&is=69f1b8bb&hm=d6c3ed50e6ed5d5a0ff7391c7264ec0715f5e2e7db04ff1b24bc8b34300bed89&",
+    "sanctum": "https://cdn.discordapp.com/attachments/1487054242244984957/1498955114839412816/Untitled13_20260329231514.png?ex=69f30a3c&is=69f1b8bc&hm=91629ed34a811c71e98e7b4b3ac8f94c1ad20ce92067652b6ebaf7f448a13b2b&",
 # ======================
 # BOT SETUP
 # ======================
