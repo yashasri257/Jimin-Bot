@@ -608,26 +608,27 @@ async def inventory(
     cards_data = await cards.find(query).to_list(None)
 
     lines = []
-    for c in cards_data:
-        count = valid.get(c["card_code"], 0)
+
+for c in cards_data:
+    count = valid.get(c["card_code"], 0)
+    if count <= 0:
+        continue
+
+    if dupes:
+        count -= 1
         if count <= 0:
             continue
 
-        if dupes:
-            count -= 1
-            if count <= 0:
-                continue
+    emoji = rarity_emoji(c["rarity"])
 
-        emoji = rarity_emoji(c["rarity"])
+    lines.append(
+        f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
+        f"〔{c['rarity']}〕 • `{c['card_code']}` • {count}"
+    )
 
-lines.append(
-    f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
-            f"〔{c['rarity']}〕 • `{c['card_code']}` • {count}"
-        )
-
-    if not lines:
-        return await interaction.followup.send("✧ nothing matches...")
-
+if not lines:
+    return await interaction.followup.send("✧ nothing matches...")
+    
     lines.sort(key=lambda x: x.lower())
     pages = [lines[i:i+5] for i in range(0, len(lines), 5)]
 
