@@ -1515,20 +1515,22 @@ async def search(
     if not results:
         return await interaction.followup.send("✧ no cards found")
 
+    
     # ======================
     # FORMAT
     # ======================
     lines = []
-    for c in results:
-        emoji = rarity_emoji(c["rarity"])
 
-lines.append(
-    f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
-    f"〔{c['rarity']}〕 • `{c['card_code']}` • {c.get('era','—')}"
-)
+for c in results:
+    emoji = rarity_emoji(c["rarity"])
 
-    lines.sort(key=lambda x: x.lower())
-    pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
+    lines.append(
+        f"{emoji} **{c['group']}** ⟡ {c['name']}\n"
+        f"〔{c['rarity']}〕 • `{c['card_code']}` • {c.get('era','—')}"
+    )
+
+lines.sort(key=lambda x: x.lower())
+pages = [lines[i:i+6] for i in range(0, len(lines), 6)]
 
     # ======================
     # VIEW
