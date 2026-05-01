@@ -185,6 +185,7 @@ def fmt(sec):
     return f"{h}h {m}m {s}s"
 
 
+
 # ======================
 # ADD CARD
 # ======================
@@ -202,9 +203,19 @@ async def add_card(
     era: str = None
 ):
 
-    if not is_staff(interaction.user.id):
-        return await interaction.response.send_message("✧ no permission", ephemeral=True)
+    # ALWAYS defer first (prevents "application didn't respond")
+    await interaction.response.defer()
 
+    # permission check
+    if not is_staff(interaction.user.id):
+        return await interaction.followup.send("✧ no permission", ephemeral=True)
+
+    # check duplicate card_code (important)
+    existing = await cards.find_one({"card_code": card_code.lower()})
+    if existing:
+        return await interaction.followup.send("✧ card code already exists")
+
+    # insert card
     await cards.insert_one({
         "name": name,
         "group": group.lower(),
@@ -216,17 +227,19 @@ async def add_card(
         "era": era
     })
 
-    emoji = get_rarity_emoji(rarity.value)
+    # emoji
+    emoji = rarity_emoji(rarity.value)
 
+    # embed
     embed = discord.Embed(
         title="✧ card added",
         description=f"{emoji} **{name}** | {group} | {rarity.name}",
         color=0x2b2d31
     )
-
     embed.set_image(url=image_url)
 
-    await interaction.response.send_message(embed=embed)
+    # send result
+    await interaction.followup.send(embed=embed)
     
 # ======================
 # DELETE
