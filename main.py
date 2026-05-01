@@ -23,14 +23,6 @@ print("TOKEN start:", TOKEN[:10] if TOKEN else None)
 TOKEN = os.getenv("TOKEN")
 MONGO = os.getenv("MONGO")
 
-STAFF_IDS = [
-    1106193228971122689,
-    702667135775801376,
-    701969588157415506,
-    701968449462599752,
-    871159389799743488
-]
-
 LOG_CHANNEL_ID = 1496151311836512378
 CURRENCY = "Relics"
 
@@ -63,6 +55,29 @@ RARITY_EMOJIS = {
     "velour": "<:velour:1498991364556324884>",
     "sanctum": "<:sanctum:1498991349347647559>",
 }
+
+# ======================
+# PERMISSIONS (4 TIERS)
+# ======================
+
+YASHU_ID = 1106193228971122689  
+
+ADMIN_IDS = [
+    871159389799743488,
+    701969588157415506,
+    701968449462599752,
+    702667135775801376
+]
+
+MOD_IDS = [
+    966512324145987654
+]
+
+STAFF_IDS = [
+    815261557897560124,
+    863994605493682206
+]
+
 # ======================
 # BOT SETUP
 # ======================
@@ -184,7 +199,17 @@ def fmt(sec):
     s = sec % 60
     return f"{h}h {m}m {s}s"
 
+def is_yashu(uid):
+    return uid == YASHU_ID
 
+def is_admin(uid):
+    return uid in ADMIN_IDS or is_yashu(uid)
+
+def is_mod(uid):
+    return uid in MOD_IDS or is_admin(uid)
+
+def is_staff(uid):
+    return uid in STAFF_IDS or is_mod(uid)
 
 # ======================
 # ADD CARD
@@ -207,7 +232,7 @@ async def add_card(
     await interaction.response.defer()
 
     # permission check
-    if not is_staff(interaction.user.id):
+    if not is_admin(interaction.user.id):
         return await interaction.followup.send("✧ no permission", ephemeral=True)
 
     # check duplicate card_code (important)
@@ -247,7 +272,7 @@ async def add_card(
 
 @tree.command(name="del_card", description="✧ remove a card (staff)")
 async def del_card(interaction:discord.Interaction, card_code:str):
-    if not is_staff(interaction.user.id):
+    if not is_admin(interaction.user.id):
         return await interaction.response.send_message("✧ no permission", ephemeral=True)
 
     await cards.delete_one({"card_code":card_code})
@@ -275,7 +300,7 @@ async def edit_card(
     # ======================
     # PERMISSION CHECK
     # ======================
-    if not is_staff(interaction.user.id):
+    if not is_admin(interaction.user.id):
         return await interaction.response.send_message(
             "✧ no permission", ephemeral=True
         )
@@ -402,7 +427,7 @@ async def mass_edit(
     # ======================
     # PERMISSION
     # ======================
-    if not is_staff(interaction.user.id):
+    if not is_admin(interaction.user.id):
         return await interaction.response.send_message(
             "✧ no permission", ephemeral=True
         )
@@ -1632,7 +1657,7 @@ async def reset_cooldown(
 ):
 
     # ✅ STAFF CHECK
-    if interaction.user.id not in STAFF_IDS:
+    if not is_mod(interaction.user.id):
         return await interaction.response.send_message("✧ no permission", ephemeral=True)
 
     await interaction.response.defer()
